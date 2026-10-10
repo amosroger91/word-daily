@@ -1,0 +1,34 @@
+# Runs on the server from /opt/word-daily (source checked out in ./src).
+services:
+  word-daily:
+    build: ./src
+    image: word-daily:latest
+    container_name: word-daily
+    restart: unless-stopped
+    env_file: .env
+    environment:
+      PUBLIC_URL: https://word.wellspringstudiollc.com
+      LLM_URL: http://word-llm:8080
+      LLM_MODEL: qwen3-4b-instruct
+      # Shares the TikTok connection made in Finds Studio (same developer app).
+      TIKTOK_TOKEN_FILE: /shared/tiktok/token.json
+      TIKTOK_CONNECT_URL: https://finds.wellspringstudiollc.com/api/tiktok/connect
+    ports:
+      - "127.0.0.1:4319:4319"
+    volumes:
+      - ./data:/data
+      - ./models:/models
+      - /opt/finds-studio/data/tiktok:/shared/tiktok
+    depends_on: [word-llm]
+    cpus: 3
+    mem_limit: 2500m
+  # Private caption model: llama.cpp serving the Qwen3 4B Instruct weights
+  # already on this server (read-only; page cache is shared with /opt/llm).
+  word-llm:
+    image: ghcr.io/ggml-org/llama.cpp:server
+    container_name: word-llm
+    restart: unless-stopped
+    command: ["-m", "/models/Huihui-Qwen3-4B-Instruct-2507-abliterated.Q4_K_M.gguf", "--host", "0.0.0.0", "--port", "8080", "-c", "2048", "-t", "3", "--parallel", "1", "--cache-type-k", "q8_0"]
+    volumes:
+      - /opt/llm/models:/models:ro
+    mem_limit: 3500m
