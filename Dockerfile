@@ -1,6 +1,8 @@
 # Production image: built studio + Express API + media worker.
 FROM node:24-bookworm-slim AS build
 WORKDIR /app
+# CPU-only server: skip ONNX Runtime's CUDA download (hundreds of MB).
+ENV ONNXRUNTIME_NODE_INSTALL_CUDA=skip
 COPY package.json package-lock.json ./
 RUN npm ci
 COPY . .
@@ -8,7 +10,7 @@ RUN npm run build
 
 FROM node:24-bookworm-slim
 WORKDIR /app
-ENV NODE_ENV=production HOST=0.0.0.0 PORT=4319 DATA_DIR=/data MODEL_CACHE_DIR=/models
+ENV ONNXRUNTIME_NODE_INSTALL_CUDA=skip NODE_ENV=production HOST=0.0.0.0 PORT=4319 DATA_DIR=/data MODEL_CACHE_DIR=/models
 RUN apt-get update && apt-get install -y --no-install-recommends ca-certificates \
     && rm -rf /var/lib/apt/lists/*
 COPY package.json package-lock.json ./
