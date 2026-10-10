@@ -17,6 +17,8 @@ export const videoSchema = z.object({
   ref: z.string().trim().min(3).max(60).optional(),
   translation: z.enum(Object.keys(TRANSLATIONS)).optional(),
   voice: z.enum(Object.keys(VOICES)).optional(),
+  // Warrior only: a sub-bass hit on every cut.
+  hits: z.boolean().optional(),
   variation: z.number().int().min(0).max(9999).default(0),
 });
 

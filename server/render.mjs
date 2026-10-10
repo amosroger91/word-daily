@@ -17,11 +17,24 @@ const VOICE_CHAINS = {
     "asetrate=41280,aresample=48000,atempo=1.1627907,highpass=f=45,equalizer=f=110:t=q:w=0.9:g=4,equalizer=f=380:t=q:w=1.2:g=-2.5,equalizer=f=2300:t=q:w=1.1:g=2.5,equalizer=f=8500:t=q:w=1:g=-3,asoftclip=type=atan:threshold=0.6:output=0.95,acompressor=threshold=0.08:ratio=5:attack=4:release=220:makeup=1.8,aecho=0.8:0.72:70|140|230:0.16|0.11|0.07",
 };
 
-export function audioGraph(style, input, { voiceStart, duration }) {
-  return `[${input}:a]aresample=48000,${VOICE_CHAINS[style] || VOICE_CHAINS.classic},loudnorm=I=-14:TP=-1.5:LRA=7,aresample=48000,adelay=${Math.round(voiceStart * 1000)}:all=1,aformat=channel_layouts=stereo,apad=whole_dur=${duration.toFixed(3)},alimiter=limit=0.9,atrim=duration=${duration.toFixed(3)}[a]`;
+// A synthesized sub-bass hit: a falling 85→38 Hz sine thump with a short noise
+// crack, for optional impacts on Warrior cuts.
+const HIT = "aevalsrc=exprs='0.85*sin(2*PI*(38+47*exp(-t*14))*t)*exp(-t*5)+0.18*(random(0)*2-1)*exp(-t*40)':s=48000:d=1.1,lowpass=f=900,aformat=channel_layouts=stereo";
+
+export function audioGraph(style, input, { voiceStart, duration }, { hits = [] } = {}) {
+  const voice = `[${input}:a]aresample=48000,${VOICE_CHAINS[style] || VOICE_CHAINS.classic},loudnorm=I=-14:TP=-1.5:LRA=7,aresample=48000,adelay=${Math.round(voiceStart * 1000)}:all=1,aformat=channel_layouts=stereo,apad=whole_dur=${duration.toFixed(3)}`;
+  const end = `alimiter=limit=0.9,atrim=duration=${duration.toFixed(3)}[a]`;
+  if (!hits.length) return `${voice},${end}`;
+  const copies = hits.map((_, i) => `[h${i}]`).join("");
+  return [
+    `${voice}[voice]`,
+    `${HIT},volume=0.55,asplit=${hits.length}${copies}`,
+    ...hits.map((at, i) => `[h${i}]adelay=${Math.round(at * 1000)}:all=1,apad=whole_dur=${duration.toFixed(3)}[d${i}]`),
+    `[voice]${hits.map((_, i) => `[d${i}]`).join("")}amix=inputs=${hits.length + 1}:duration=first:normalize=0,${end}`,
+  ].join(";");
 }
 
-export async function renderVerseVideo({ style, scene, plan, files, output }, report, signal) {
+export async function renderVerseVideo({ style, scene, plan, files, output, hits = false }, report, signal) {
   const S = sceneFor(style);
   const canvas = createCanvas(WIDTH, HEIGHT);
   const ctx = canvas.getContext("2d");
@@ -35,7 +48,7 @@ export async function renderVerseVideo({ style, scene, plan, files, output }, re
     "-f", "rawvideo", "-pixel_format", "rgba", "-video_size", `${WIDTH}x${HEIGHT}`, "-framerate", String(FPS), "-i", "pipe:0",
     ...background.input,
     "-i", scene.narration.file,
-    "-filter_complex", `${overlayGraph(style)};${audioGraph(style, 2, tl)}`,
+    "-filter_complex", `${overlayGraph(style, plan)};${audioGraph(style, 2, tl, { hits: hits && style === "warrior" ? [tl.intro ?? 0, ...plan.cuts] : [] })}`,
     "-map", "[v]", "-map", "[a]",
     "-t", tl.duration.toFixed(3),
     "-c:v", "libx264", "-preset", process.env.X264_PRESET || "slow", "-crf", "17", "-profile:v", "high", "-tune", style === "warrior" ? "grain" : "film",

@@ -16,6 +16,17 @@ Use today's Daily Discovery verse, or choose any passage (up to 12 verses) by re
 
 Warrior captions stay about courage, discipline, and spiritual warfare, never hostility toward any group.
 
+### How footage is matched
+
+Every shot is chosen from the words spoken during it (`server/matcher.mjs`), all on the CPU:
+
+1. **Gates.** Crucifixion and Christ imagery appears only when the verse is about Christ (cross, Jesus, "his blood", "only begotten Son"…). A David verse can never show the cross.
+2. **Stories.** Names lock a verse to its story (David, Goliath, Philistine → *David Slays Goliath*; Pharaoh → the Red Sea). Other stories' engravings then stay out. Theme words (lion, wrestle, devil) only lean.
+3. **Meaning.** A MiniLM sentence-embedding model (ONNX, ~23 MB) scores each asset's written description against the phrase and the whole verse ("a strong tower" → gothic columns, "wings as eagles" → the eagle).
+4. **Variety.** No asset twice within three shots, except the verse's own story plate, which can return on its key moments.
+
+Warrior also punches in on every cut, tears the colour channels for a few frames, bleeds a red light leak, adds film scratches and flicker, shakes as each phrase lands, and burns words of power red. An optional sub-bass hit can land on every cut. Uplifting adds drifting bokeh and a warm light leak across each cross-fade.
+
 ## How a video is made
 
 ```text

@@ -9,6 +9,7 @@ import { writeCaption, composeCaption } from "./caption.mjs";
 import { narrate, VOICES } from "./voice.mjs";
 import { timeNarration } from "./align.mjs";
 import { planShots, prepare } from "./footage.mjs";
+import { releaseEmbedder } from "./matcher.mjs";
 import { renderVerseVideo } from "./render.mjs";
 import { probe } from "./media.mjs";
 import { createCanvas } from "./canvas.mjs";
@@ -61,9 +62,11 @@ export async function generateVideo(id, options, report, signal) {
   const S = sceneFor(style);
   const layout = S.layout(createCanvas(WIDTH, HEIGHT).getContext("2d"), words);
   const tl = S.timeline(narration.duration);
-  const plan = planShots(style, verse, { words, timeline: { ...tl, intro: tl.intro ?? 2.8 }, groups: layout.groups || [] }, `${verse.reference}:${verse.date}:${options.variation || 0}`);
-
   const mediaReport = stage(report, "media");
+  mediaReport(0, "Matching footage to every phrase…");
+  const plan = await planShots(style, verse, { words, timeline: { ...tl, intro: tl.intro ?? 2.8 }, groups: layout.groups || [] }, `${verse.reference}:${verse.date}:${options.variation || 0}`);
+
+  await releaseEmbedder();
   const unique = [...new Map(plan.shots.map((shot) => [shot.asset.key, shot.asset])).values()];
   const prepared = new Map();
   for (const [index, asset] of unique.entries()) {
@@ -75,9 +78,9 @@ export async function generateVideo(id, options, report, signal) {
   const temporary = path.join(directory, "rendering.mp4");
   const output = path.join(directory, "verse-of-the-day.mp4");
   const eyebrow = verse.picked ? verse.translationName : `Verse of the day · ${prettyDate(verse.date)}`;
-  const scene = { verse, words, narration, layout, eyebrow, dateLabel: prettyDate(verse.date), appLabel: appLabel(wordAppUrl), cuts: plan.cuts };
+  const scene = { verse, words, narration, layout, eyebrow, dateLabel: prettyDate(verse.date), appLabel: appLabel(wordAppUrl), cuts: plan.cuts, transitions: plan.mode === "crossfade" ? plan.shots.slice(1).map((shot) => shot.start + plan.crossfade / 2) : [] };
   const rendered = await renderVerseVideo(
-    { style, scene, plan, files: plan.shots.map((shot) => prepared.get(shot.asset.key)), output: temporary },
+    { style, scene, plan, files: plan.shots.map((shot) => prepared.get(shot.asset.key)), output: temporary, hits: Boolean(options.hits) },
     (percent, message) => renderReport(percent / 100, message),
     signal,
   );
@@ -104,6 +107,7 @@ export async function generateVideo(id, options, report, signal) {
     voice,
     voiceLabel: VOICES[voice],
     footage: unique.map(({ label, credit, kind }) => ({ label, credit, kind })),
+    shots: plan.shots.map((shot) => ({ at: Math.round(shot.start * 10) / 10, label: shot.asset.label, phrase: shot.phrase })),
     caption,
     captionModel: captionParts.model,
     words,

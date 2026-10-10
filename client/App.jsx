@@ -56,6 +56,7 @@ export default function App() {
   const [translation, setTranslation] = useState("");
   const [picked, setPicked] = useState(null);
   const [pickError, setPickError] = useState("");
+  const [hits, setHits] = useState(false);
   const [job, setJob] = useState(null);
   const [video, setVideo] = useState(null);
   const [caption, setCaption] = useState("");
@@ -83,6 +84,7 @@ export default function App() {
         setTranslation(first.translation);
         setRef(read("word-ref") || "");
         if (read("word-source") === "pick") setSource("pick");
+        setHits(read("word-hits") === "1");
       })
       .catch((e) => setError(e.message));
     api("api/videos")
@@ -172,7 +174,8 @@ export default function App() {
       write(`word-voice-v2-${style}`, voice);
       write("word-source", source);
       if (source === "pick") write("word-ref", ref);
-      setJob(await api("api/videos", { style, voice, variation: variation.current, ...(source === "pick" && { ref, translation }) }));
+      write("word-hits", hits ? "1" : "0");
+      setJob(await api("api/videos", { style, voice, variation: variation.current, ...(style === "warrior" && { hits }), ...(source === "pick" && { ref, translation }) }));
       variation.current += 1;
     } catch (e) {
       setError(e.message);
@@ -289,6 +292,15 @@ export default function App() {
                   </select>
                 </label>
               </div>
+              {style === "warrior" && (
+                <label className="toggle">
+                  <input type="checkbox" checked={hits} onChange={(e) => setHits(e.target.checked)} disabled={busy} />
+                  <span>
+                    Impact hits on cuts
+                    <small>A deep bass hit lands on every cut. Leave off if you'll add your own music in TikTok.</small>
+                  </span>
+                </label>
+              )}
               <button className="primary" onClick={generate} disabled={busy || !ready}>
                 {generating ? <LoaderCircle className="spin" size={18} /> : <Sparkles size={18} />}
                 {generating ? "Generating…" : video && video.style === style && video.verse?.reference === shown?.reference ? "Generate another take" : "Generate video"}

@@ -127,3 +127,8 @@ textarea { resize: vertical; line-height: 1.55; font-size: 13px; }
   .style-card .swatch { grid-row: span 2; height: 100%; margin: 0; }
   .pick { grid-template-columns: 1fr; }
 }
+
+.toggle { display: flex; align-items: flex-start; gap: 10px; text-transform: none; letter-spacing: 0; font-size: 14px; color: var(--ink); font-weight: 700; cursor: pointer; }
+.toggle input { width: 18px; height: 18px; margin-top: 2px; accent-color: var(--accent); }
+.toggle span { display: grid; gap: 3px; }
+.toggle small { font-weight: 400; color: var(--ink-soft); font-size: 12px; line-height: 1.45; }

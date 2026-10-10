@@ -4,7 +4,8 @@ import { decodeEntities, displayReference, parseReference, speechChunks, spokenR
 import { isoDate, normalizeVerse } from "../server/verse.mjs";
 import { timeVerseWords, alignKeys } from "../shared/align.mjs";
 import { parseCaption, composeCaption } from "../server/caption.mjs";
-import { chooseBroll, BROLL } from "../server/library.mjs";
+import { matchShots, allowed, storyScore } from "../server/matcher.mjs";
+import { WARRIOR, CALM, UPLIFT } from "../server/catalog.mjs";
 
 test("normalizes the Daily Discovery payload", () => {
   const verse = normalizeVerse({
@@ -74,13 +75,32 @@ test("accepts only on-brief AI captions", () => {
   assert.match(caption, /#TheWord #VerseOfTheDay #GoodShepherd/);
 });
 
-test("picks B-roll that fits the verse, reproducibly per day", () => {
-  const shepherd = chooseBroll("My sheep recognize my voice", "2026-10-10");
-  assert.equal(shepherd.length, 3);
-  assert.ok(shepherd.some((clip) => clip.tags.includes("shepherd") || clip.tags.includes("field")));
-  assert.deepEqual(chooseBroll("Be still", "a"), chooseBroll("Be still", "a"));
-  assert.equal(new Set(BROLL.map((clip) => clip.id)).size, BROLL.length);
+test("footage gates keep Christ imagery to verses about Christ", () => {
+  const crucifixion = WARRIOR.find((asset) => asset.label === "The Crucifixion");
+  assert.equal(allowed(crucifixion, "Therefore David ran, and stood upon the Philistine, and took his sword"), false);
+  assert.equal(allowed(crucifixion, "For we wrestle not against flesh and blood"), false);
+  assert.equal(allowed(crucifixion, "For God so loved the world, that he gave his only begotten Son"), true);
+  assert.equal(allowed(crucifixion, "the precious blood of Christ"), true);
+  const david = WARRIOR.find((asset) => asset.label === "David Slays Goliath");
+  assert.deepEqual(storyScore(david, "David ran, and stood upon the Philistine"), { names: 2, themes: 0 });
+  for (const asset of [...WARRIOR, ...CALM, ...UPLIFT]) assert.ok(asset.about && asset.label && asset.url, asset.key);
+  assert.equal(new Set(WARRIOR.map((asset) => asset.key)).size, WARRIOR.length);
 });
+
+test("a story verse stays in its story, phrase by phrase", async () => {
+  // Without the embedding model, story words and gates alone must hold.
+  const flat = async (texts) => texts.map(() => new Array(4).fill(0.5));
+  const verse = { text: "Therefore David ran, and stood upon the Philistine, and took his sword, and drew it out of the sheath thereof, and slew him, and cut off his head therewith." };
+  const phrases = ["Therefore David ran,", "and stood upon the Philistine,", "and took his sword,", "and slew him, and cut off", "his head therewith."];
+  const picks = await matchShots(WARRIOR, verse, phrases.map((phrase) => ({ phrase })), { seed: "t", embedder: flat });
+  assert.equal(picks.length, 5);
+  assert.ok(picks.some((asset) => asset.label === "David Slays Goliath"));
+  for (const asset of picks) {
+    assert.doesNotMatch(asset.label, /Crucifixion|Christ|Cross|Samson|Red Sea|Daniel|Joshua|Gideon/, asset.label);
+  }
+  for (let i = 1; i < picks.length; i++) assert.notEqual(picks[i].key, picks[i - 1].key);
+});
+
 
 test("looks up any reference in the bundled translations", async () => {
   const { lookupVerse } = await import("../server/bible.mjs");

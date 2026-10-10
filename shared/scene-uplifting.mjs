@@ -34,6 +34,27 @@ function sparkles(ctx, t, alpha) {
   }
 }
 
+// Soft, out-of-focus discs of light drifting slowly upward.
+const BOKEH = Array.from({ length: 11 }, (_, i) => {
+  const r = (n) => (Math.sin(i * 57.3 + n * 21.7) + 1) / 2;
+  return { x: r(1) * WIDTH, y: r(2) * HEIGHT, size: 50 + r(3) * 110, speed: 8 + r(4) * 18, phase: r(5) * 6.28, warm: r(6) > 0.4 };
+});
+function bokeh(ctx, t, alpha) {
+  for (const b of BOKEH) {
+    const y = (b.y - t * b.speed + HEIGHT * 2) % HEIGHT;
+    const x = b.x + Math.sin(t * 0.4 + b.phase) * 24;
+    const glow = ctx.createRadialGradient(x, y, 0, x, y, b.size);
+    const a = alpha * (0.1 + 0.08 * Math.sin(t * 0.9 + b.phase));
+    glow.addColorStop(0, b.warm ? `rgba(255,236,196,${a})` : `rgba(255,255,255,${a})`);
+    glow.addColorStop(0.7, b.warm ? `rgba(255,236,196,${a * 0.6})` : `rgba(255,255,255,${a * 0.6})`);
+    glow.addColorStop(1, "rgba(255,255,255,0)");
+    ctx.fillStyle = glow;
+    ctx.beginPath();
+    ctx.arc(x, y, b.size, 0, Math.PI * 2);
+    ctx.fill();
+  }
+}
+
 function paperCard(ctx, Path2D, p, { lines = [], url } = {}) {
   const g = ctx.createRadialGradient(WIDTH / 2, 760, 80, WIDTH / 2, 960, 1250);
   g.addColorStop(0, LIGHT.surface);
@@ -132,7 +153,21 @@ export function draw(ctx, Path2D, scene, t) {
   ctx.fillStyle = wash;
   ctx.fillRect(0, 0, WIDTH, HEIGHT);
   const enter = ease(span(t, INTRO - 0.55, INTRO + 0.45));
+  bokeh(ctx, t, enter);
   sparkles(ctx, t, enter);
+  // A warm light leak sweeps across each cross-fade.
+  for (const at of scene.transitions || []) {
+    const k = (t - (at - 0.9)) / 1.8;
+    if (k <= 0 || k >= 1) continue;
+    const x = -300 + (WIDTH + 600) * k;
+    const leak = ctx.createRadialGradient(x, HEIGHT * 0.35, 40, x, HEIGHT * 0.45, 900);
+    const a = Math.sin(Math.PI * k);
+    leak.addColorStop(0, `rgba(255,236,190,${0.55 * a})`);
+    leak.addColorStop(0.4, `rgba(255,190,120,${0.22 * a})`);
+    leak.addColorStop(1, "rgba(255,190,120,0)");
+    ctx.fillStyle = leak;
+    ctx.fillRect(0, 0, WIDTH, HEIGHT);
+  }
   const narrationTime = t - voiceStart;
   const speaking = t >= voiceStart && t <= voiceEnd;
   ctx.save();
