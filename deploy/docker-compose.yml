@@ -8,7 +8,10 @@ services:
     env_file: .env
     environment:
       PUBLIC_URL: https://word.wellspringstudiollc.com
-      LLM_URL: http://word-llm:8080
+      # Captions come from the server's existing llama.cpp container (Qwen3 4B
+      # Instruct on :8081); LLM_API_KEY is set in .env. A second copy of the
+      # model does not fit in this server's memory.
+      LLM_URL: http://host.docker.internal:8081
       LLM_MODEL: qwen3-4b-instruct
       # Shares the TikTok connection made in Finds Studio (same developer app).
       TIKTOK_TOKEN_FILE: /shared/tiktok/token.json
@@ -19,16 +22,8 @@ services:
       - ./data:/data
       - ./models:/models
       - /opt/finds-studio/data/tiktok:/shared/tiktok
-    depends_on: [word-llm]
-    cpus: 3
-    mem_limit: 2500m
-  # Private caption model: llama.cpp serving the Qwen3 4B Instruct weights
-  # already on this server (read-only; page cache is shared with /opt/llm).
-  word-llm:
-    image: ghcr.io/ggml-org/llama.cpp:server
-    container_name: word-llm
-    restart: unless-stopped
-    command: ["-m", "/models/Huihui-Qwen3-4B-Instruct-2507-abliterated.Q4_K_M.gguf", "--host", "0.0.0.0", "--port", "8080", "-c", "2048", "-t", "3", "--parallel", "1", "--cache-type-k", "q8_0"]
-    volumes:
-      - /opt/llm/models:/models:ro
-    mem_limit: 3500m
+    extra_hosts:
+      - "host.docker.internal:host-gateway"
+    # Leave headroom for the sites and the LLM sharing this 4-core, 3.8 GB box.
+    cpus: 2
+    mem_limit: 1800m

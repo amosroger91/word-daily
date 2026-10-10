@@ -8,7 +8,7 @@ One click turns today's verse into a polished 1080 × 1920 video in The Word's s
 
 ```text
 Daily Discovery API ──► verse (cached per day)
-                        ├─ caption: Qwen3 (llama.cpp sidecar, or on-device) → hook + reflection + tags
+                        ├─ caption: Qwen3 (server llama.cpp, or on-device) → hook + reflection + tags
                         ├─ narration: Kokoro-82M, sentence by sentence, with natural pauses
                         ├─ word timing: Whisper hears each phrase → aligned onto the exact verse words
                         ├─ B-roll: 3 Mixkit clips matched to the verse's imagery, cross-faded and graded
@@ -52,7 +52,7 @@ The first generation downloads the voice (~330 MB), Whisper (~140 MB), and, with
 
 ## Production
 
-`deploy/` holds the Docker Compose file (studio + private llama.cpp caption model), the Apache vhost, and the server deploy script. Deployed at https://word.wellspringstudiollc.com behind the studio login; `/site/` (homepage, privacy, terms) is public.
+`deploy/` holds the Docker Compose file (studio; captions use the server's existing llama.cpp container), the Apache vhost, and the server deploy script. Deployed at https://word.wellspringstudiollc.com behind the studio login; `/site/` (homepage, privacy, terms) is public.
 
 ## Credits
 
