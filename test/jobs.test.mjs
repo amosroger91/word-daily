@@ -10,10 +10,14 @@ import { readJson } from "../server/storage.mjs";
 class Worker extends EventEmitter {
   stderr = new EventEmitter();
   messages = [];
+  exitCode = null;
   send(message) {
     this.messages.push(message);
   }
   kill() {
+    if (this.killed) return;
+    this.killed = true;
+    this.exitCode = 0;
     this.emit("exit", 0);
   }
 }
@@ -98,4 +102,15 @@ test("concurrent queue submissions cannot exceed the eight-job limit", async (t)
     ).length,
     4,
   );
+});
+
+test("a worker that ignores cancel is stopped so the queue moves on", async (t) => {
+  t.mock.timers.enable({ apis: ["setTimeout"] });
+  const { jobs, workers } = await fixture(t);
+  const job = await jobs.add("video", {});
+  workers[0].emit("message", { type: "progress", stage: "render", progress: 70, message: "Rendering" });
+  await jobs.cancel(job.id);
+  assert.equal(workers[0].killed, undefined);
+  t.mock.timers.tick(10000);
+  assert.equal(workers[0].killed, true);
 });

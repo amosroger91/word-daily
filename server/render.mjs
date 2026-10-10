@@ -3,7 +3,9 @@ import { createCanvas, Path2D } from "./canvas.mjs";
 import { ffmpegPath, FPS } from "./config.mjs";
 import { WIDTH, HEIGHT } from "../shared/scene.mjs";
 import { sceneFor } from "../shared/scenes.mjs";
-import { shotInputs, videoGraph } from "./footage.mjs";
+import { rm } from "node:fs/promises";
+import path from "node:path";
+import { renderBackground, overlayGraph } from "./footage.mjs";
 
 // Narration treatment per style. Voice only: music is added in TikTok's editor.
 const VOICE_CHAINS = {
@@ -23,18 +25,21 @@ export async function renderVerseVideo({ style, scene, plan, files, output }, re
   const ctx = canvas.getContext("2d");
   const tl = S.timeline(scene.narration.duration);
   const count = Math.ceil(tl.duration * FPS);
-  const voiceInput = plan.shots.length + 1;
+  // The footage bed is cut shot by shot first; the final pass then has just
+  // three inputs (overlay, footage, voice), which keeps memory flat.
+  const background = await renderBackground(style, plan, files, path.dirname(output), count, (fraction, message) => report(Math.round(fraction * 25), message), signal);
   const args = [
     "-y", "-v", "error",
     "-f", "rawvideo", "-pixel_format", "rgba", "-video_size", `${WIDTH}x${HEIGHT}`, "-framerate", String(FPS), "-i", "pipe:0",
-    ...shotInputs(plan, files),
+    ...background.input,
     "-i", scene.narration.file,
-    "-filter_complex", `${videoGraph(style, plan)};${audioGraph(style, voiceInput, tl)}`,
+    "-filter_complex", `${overlayGraph(style)};${audioGraph(style, 2, tl)}`,
     "-map", "[v]", "-map", "[a]",
     "-t", tl.duration.toFixed(3),
     "-c:v", "libx264", "-preset", process.env.X264_PRESET || "slow", "-crf", "17", "-profile:v", "high", "-tune", style === "warrior" ? "grain" : "film",
-    "-g", String(FPS * 2), "-bf", "2", "-pix_fmt", "yuv420p", "-color_primaries", "bt709", "-color_trc", "bt709", "-colorspace", "bt709",
-    "-threads", "4",
+    "-g", String(FPS * 2), "-bf", "2", "-x264-params", "rc-lookahead=30", "-pix_fmt", "yuv420p", "-color_primaries", "bt709", "-color_trc", "bt709", "-colorspace", "bt709",
+    // Matches the container's two CPUs and bounds encoder memory.
+    "-threads", "2",
     "-c:a", "aac", "-b:a", "256k", "-ar", "48000",
     "-movflags", "+faststart",
     "-metadata", `title=${scene.verse.reference} · The Word`,
@@ -56,8 +61,9 @@ export async function renderVerseVideo({ style, scene, plan, files, output }, re
       if (failure || encoder.exitCode !== null) throw failure || new Error(errorText || "The video encoder stopped unexpectedly.");
       S.draw(ctx, Path2D, scene, i / FPS);
       const frame = canvas.data();
-      if (!encoder.stdin.write(frame)) await new Promise((resolve) => encoder.stdin.once("drain", resolve));
-      if (i % 15 === 0) report(Math.round((i / count) * 100), `Rendering frame ${i + 1} of ${count}…`);
+      // If the encoder dies mid-write, "drain" never comes; its exit ends the wait.
+      if (!encoder.stdin.write(frame)) await Promise.race([new Promise((resolve) => encoder.stdin.once("drain", resolve)), done]);
+      if (i % 15 === 0) report(25 + Math.round((i / count) * 75), `Rendering frame ${i + 1} of ${count}…`);
     }
     encoder.stdin.end();
     const code = await done;
@@ -69,5 +75,6 @@ export async function renderVerseVideo({ style, scene, plan, files, output }, re
     throw error;
   } finally {
     signal.removeEventListener("abort", abort);
+    await Promise.all(background.cleanup.map((file) => rm(file, { force: true })));
   }
 }

@@ -1,5 +1,5 @@
 import { createWriteStream } from "node:fs";
-import { access, mkdir, rename, rm } from "node:fs/promises";
+import { access, mkdir, rename, rm, writeFile } from "node:fs/promises";
 import path from "node:path";
 import { Readable } from "node:stream";
 import { pipeline } from "node:stream/promises";
@@ -159,43 +159,79 @@ const GRADES = {
   warrior: "hue=s=0,eq=contrast=1.32:brightness=-0.045:gamma=0.9,noise=alls=13:allf=t,vignette=angle=PI/4",
 };
 
-// FFmpeg inputs for the shots (after the overlay pipe at input 0).
-export function shotInputs(plan, files) {
-  return plan.shots.flatMap((shot, i) =>
-    shot.asset.kind === "still"
-      ? ["-loop", "1", "-framerate", String(FPS), "-t", shot.duration.toFixed(3), "-i", files[i]]
-      : ["-stream_loop", "-1", "-ss", (shot.offset * 4).toFixed(2), "-i", files[i]],
-  );
+// One shot's motion and framing: a slow push and pan across engravings
+// (direction varies per shot), a push-in on Warrior footage.
+function shotFilter(style, shot, frames) {
+  const D = (frames / FPS).toFixed(3);
+  let motion;
+  if (shot.asset.kind === "still") {
+    const [x, y] = [
+      [`(iw-${WIDTH})*t/${D}`, `(ih-${HEIGHT})/2`],
+      [`(iw-${WIDTH})*(1-t/${D})`, `(ih-${HEIGHT})/2`],
+      [`(iw-${WIDTH})/2`, `(ih-${HEIGHT})*t/${D}`],
+      [`(iw-${WIDTH})/2`, `(ih-${HEIGHT})*(1-t/${D})`],
+    ][shot.motion];
+    motion = `scale=w='trunc(iw*(1+0.07*t/${D})/2)*2':h=-2:eval=frame,crop=${WIDTH}:${HEIGHT}:x='${x}':y='${y}'`;
+  } else {
+    const push = style === "warrior" ? `,scale=w='trunc(${WIDTH}*(1+0.08*t/${D})/2)*2':h=-2:eval=frame,crop=${WIDTH}:${HEIGHT}` : "";
+    motion = `scale=${WIDTH}:${HEIGHT}:force_original_aspect_ratio=increase:flags=lanczos,crop=${WIDTH}:${HEIGHT}${push}`;
+  }
+  return `${motion},fps=${FPS},setsar=1,format=yuv420p`;
 }
 
-export function videoGraph(style, plan) {
-  const parts = plan.shots.map((shot, i) => {
-    const D = shot.duration.toFixed(3);
-    const input = `[${i + 1}:v]`;
-    if (shot.asset.kind === "still") {
-      // Slow push and pan across the engraving; direction varies per shot.
-      const [x, y] = [
-        [`(iw-${WIDTH})*t/${D}`, `(ih-${HEIGHT})/2`],
-        [`(iw-${WIDTH})*(1-t/${D})`, `(ih-${HEIGHT})/2`],
-        [`(iw-${WIDTH})/2`, `(ih-${HEIGHT})*t/${D}`],
-        [`(iw-${WIDTH})/2`, `(ih-${HEIGHT})*(1-t/${D})`],
-      ][shot.motion];
-      return `${input}scale=w='trunc(iw*(1+0.07*t/${D})/2)*2':h=-2:eval=frame,crop=${WIDTH}:${HEIGHT}:x='${x}':y='${y}',fps=${FPS},setsar=1,format=yuv420p,trim=duration=${D},setpts=PTS-STARTPTS[s${i}]`;
-    }
-    const push = style === "warrior" ? `,scale=w='trunc(${WIDTH}*(1+0.08*t/${D})/2)*2':h=-2:eval=frame,crop=${WIDTH}:${HEIGHT}` : "";
-    return `${input}scale=${WIDTH}:${HEIGHT}:force_original_aspect_ratio=increase:flags=lanczos,crop=${WIDTH}:${HEIGHT}${push},fps=${FPS},setsar=1,format=yuv420p,trim=duration=${D},setpts=PTS-STARTPTS[s${i}]`;
-  });
-  let last;
-  if (plan.mode === "cuts") {
-    parts.push(`${plan.shots.map((_, i) => `[s${i}]`).join("")}concat=n=${plan.shots.length}:v=1:a=0[joined]`);
-    last = "joined";
-  } else {
-    last = "s0";
-    for (let i = 1; i < plan.shots.length; i++) {
-      parts.push(`[${last}][s${i}]xfade=transition=fade:duration=${plan.crossfade}:offset=${plan.shots[i].start.toFixed(3)}[x${i}]`);
-      last = `x${i}`;
-    }
-  }
-  parts.push(`[${last}]${GRADES[style] || GRADES.classic},format=rgba[bg]`, `[bg][0:v]overlay=0:0:format=auto,format=yuv420p[v]`);
-  return parts.join(";");
+// Frame-exact shot lengths, so the joined footage lines up with the overlay.
+function shotFrames(plan, total) {
+  if (plan.mode === "cuts")
+    return plan.shots.map((shot, i) => {
+      const end = i === plan.shots.length - 1 ? total : Math.round((shot.start + shot.duration) * FPS);
+      return end - Math.round(shot.start * FPS);
+    });
+  return plan.shots.map((shot) => Math.round(shot.duration * FPS));
 }
+
+const INTERMEDIATE = ["-an", "-c:v", "libx264", "-preset", "veryfast", "-crf", "14", "-pix_fmt", "yuv420p", "-threads", "2"];
+
+/**
+ * Renders the footage bed one shot at a time (so memory stays flat however
+ * many cuts there are) and returns FFmpeg input arguments for the result.
+ */
+export async function renderBackground(style, plan, files, directory, totalFrames, report, signal) {
+  const frames = shotFrames(plan, totalFrames);
+  const segments = [];
+  for (const [i, shot] of plan.shots.entries()) {
+    signal.throwIfAborted();
+    report(i / plan.shots.length, `Cutting shot ${i + 1} of ${plan.shots.length}: ${shot.asset.label}…`);
+    const out = path.join(directory, `shot-${String(i).padStart(2, "0")}.mp4`);
+    const input =
+      shot.asset.kind === "still"
+        ? ["-loop", "1", "-framerate", String(FPS), "-i", files[i]]
+        : ["-stream_loop", "-1", "-ss", (shot.offset * 4).toFixed(2), "-i", files[i]];
+    await run(ffmpegPath, ["-y", "-v", "error", ...input, "-vf", shotFilter(style, shot, frames[i]), "-frames:v", String(frames[i]), ...INTERMEDIATE, out], { signal, timeout: 300000 });
+    segments.push(out);
+  }
+  if (plan.mode === "cuts") {
+    const list = path.join(directory, "shots.txt");
+    // Shot files are named by us (shot-NN.mp4), so the paths need no quoting beyond this.
+    await writeFile(list, segments.map((file) => `file '${file.replace(/\\/g, "/")}'`).join("\n"));
+    return { input: ["-f", "concat", "-safe", "0", "-i", list], cleanup: [...segments, list] };
+  }
+  // Cross-fades between a handful of shots, in one light pass.
+  report(1, "Blending the shots…");
+  const blended = path.join(directory, "footage.mp4");
+  let last = "0:v";
+  const graph = [];
+  for (let i = 1; i < segments.length; i++) {
+    graph.push(`[${last}][${i}:v]xfade=transition=fade:duration=${plan.crossfade}:offset=${plan.shots[i].start.toFixed(3)}[x${i}]`);
+    last = `x${i}`;
+  }
+  await run(
+    ffmpegPath,
+    ["-y", "-v", "error", ...segments.flatMap((file) => ["-i", file]), ...(graph.length ? ["-filter_complex", graph.join(";"), "-map", `[${last}]`] : []), "-frames:v", String(totalFrames), ...INTERMEDIATE, blended],
+    { signal, timeout: 300000 },
+  );
+  return { input: ["-i", blended], cleanup: [...segments, blended] };
+}
+
+// Final pass: grade the footage bed and lay The Word overlay on top.
+export const overlayGraph = (style) =>
+  `[1:v]${GRADES[style] || GRADES.classic},format=rgba[bg];[bg][0:v]overlay=0:0:format=auto,format=yuv420p[v]`;

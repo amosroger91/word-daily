@@ -99,3 +99,8 @@ test("groups Warrior phrases at punctuation, three words at most", async () => {
   const groups = groupWords(words).map((g) => words.slice(g.start, g.end + 1).map((w) => w.word).join(" "));
   assert.deepEqual(groups, ["Be strong and", "of a good", "courage;", "be not afraid,", "neither be thou", "dismayed."]);
 });
+
+test("rejects captions that echo the prompt's example", () => {
+  assert.equal(parseCaption('{"hook":"You don\'t have to hold everything together today.","reflection":"Stillness isn\'t giving up, it\'s remembering who is actually in control. Take one quiet minute.","hashtags":["#BeStill"]}'), null);
+  assert.ok(parseCaption('{"hook":"The Lord fights for you.","reflection":"You are not standing alone in this fight. Take courage and walk forward.","hashtags":["#StandFirm"]}'));
+});

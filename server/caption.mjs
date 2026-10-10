@@ -30,6 +30,13 @@ const messagesFor = (verse, style = "classic") => [
   { role: "user", content: `${verse.reference} — "${verse.text}"` },
 ];
 
+const exampleWords = new Set(JSON.parse(EXAMPLE[1].content).hook.concat(" ", JSON.parse(EXAMPLE[1].content).reflection).toLowerCase().match(/[a-z']+/g));
+function copiesExample(text) {
+  const words = String(text).toLowerCase().match(/[a-z']+/g) || [];
+  const shared = words.filter((word) => word.length > 3 && exampleWords.has(word)).length;
+  return words.length > 0 && shared / words.filter((word) => word.length > 3).length > 0.5;
+}
+
 // Accepts only well-formed, on-brief output; anything else is retried.
 export function parseCaption(raw) {
   const text = String(raw).replace(/<think>[\s\S]*?<\/think>/g, "");
@@ -49,6 +56,8 @@ export function parseCaption(raw) {
     .filter((tag) => tag.length > 2 && tag.length < 30))];
   if (words < 3 || words > 16 || sentences < 1 || sentences > 3 || reflection.length > 320 || /!/.test(hook + reflection))
     return null;
+  // Small models sometimes echo the worked example instead of writing their own.
+  if (copiesExample(hook) || copiesExample(reflection)) return null;
   return { hook, reflection, hashtags: hashtags.slice(0, 4) };
 }
 

@@ -82,6 +82,10 @@ export async function narrate(verse, voice, file, report = () => {}, signal, { s
     offset += piece.length;
   }
   await writeFile(file, wav(total, RATE));
+  // Free the voice model before rendering; the worker exits after each job anyway.
+  const loaded = await engine.catch(() => null);
+  engine = null;
+  await loaded?.model?.dispose?.();
   return { file, voice, rate: RATE, duration: total.length / RATE, segments };
 }
 

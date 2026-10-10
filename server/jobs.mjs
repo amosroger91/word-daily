@@ -134,6 +134,7 @@ export class Jobs {
         job.error = "The job exceeded its processing time limit. Please try again.";
         child.send({ type: "cancel" });
         if (inModel(job)) child.kill();
+        else setTimeout(() => child.exitCode === null && child.kill(), 10000).unref?.();
         this.save(job).catch(console.error);
       },
       job.type === "video" ? 40 * 60 * 1000 : 20 * 60 * 1000,
@@ -146,9 +147,12 @@ export class Jobs {
     job.status = "cancelled";
     job.message = "Cancelled.";
     if (this.active?.job.id === id) {
-      this.active.child.send({ type: "cancel" });
+      const { child } = this.active;
+      child.send({ type: "cancel" });
       // Native inference can be busy in ONNX; terminating this isolated worker cancels it immediately.
-      if (inModel(job)) this.active.child.kill();
+      if (inModel(job)) child.kill();
+      // Any worker that hasn't wound down shortly is stopped, so the queue never jams.
+      else setTimeout(() => child.exitCode === null && child.kill(), 10000).unref?.();
     }
     await this.save(job);
     return job;
