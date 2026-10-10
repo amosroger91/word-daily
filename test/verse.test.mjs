@@ -4,7 +4,7 @@ import { decodeEntities, displayReference, parseReference, speechChunks, spokenR
 import { isoDate, normalizeVerse } from "../server/verse.mjs";
 import { timeVerseWords, alignKeys } from "../shared/align.mjs";
 import { parseCaption, composeCaption } from "../server/caption.mjs";
-import { chooseBroll, chooseMusic, BROLL } from "../server/library.mjs";
+import { chooseBroll, BROLL } from "../server/library.mjs";
 
 test("normalizes the Daily Discovery payload", () => {
   const verse = normalizeVerse({
@@ -68,7 +68,7 @@ test("accepts only on-brief AI captions", () => {
   assert.deepEqual(good, { hook: "You are known by name.", reflection: "Jesus knows his own and holds them fast. Nothing today can pull you out of his hand.", hashtags: ["#GoodShepherd", "#Faith", "#Hope"] });
   assert.equal(parseCaption("not json"), null);
   assert.equal(parseCaption('{"hook":"Wow!","reflection":"Amazing!","hashtags":[]}'), null);
-  const caption = composeCaption({ text: "Be still.", reference: "Psalm 46:10", source: "Daily Discovery Bible Study" }, good, { credit: "Music: “At Rest” by Kevin MacLeod" });
+  const caption = composeCaption({ text: "Be still.", reference: "Psalm 46:10", source: "Daily Discovery Bible Study" }, good);
   assert.match(caption, /^You are known by name\.\n\n“Be still\.” — Psalm 46:10/);
   assert.match(caption, /Read it free in The Word/);
   assert.match(caption, /#TheWord #VerseOfTheDay #GoodShepherd/);
@@ -80,6 +80,4 @@ test("picks B-roll that fits the verse, reproducibly per day", () => {
   assert.ok(shepherd.some((clip) => clip.tags.includes("shepherd") || clip.tags.includes("field")));
   assert.deepEqual(chooseBroll("Be still", "a"), chooseBroll("Be still", "a"));
   assert.equal(new Set(BROLL.map((clip) => clip.id)).size, BROLL.length);
-  assert.equal(chooseMusic("x", "at-rest").title, "At Rest");
-  assert.equal(chooseMusic("2026-10-10").id, chooseMusic("2026-10-10").id);
 });

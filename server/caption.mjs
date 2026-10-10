@@ -95,7 +95,7 @@ export const fallbackCaption = (verse) => ({
   hashtags: ["#Faith", "#Scripture", "#Jesus", "#DailyBread"],
 });
 
-export function composeCaption(verse, parts, music) {
+export function composeCaption(verse, parts) {
   const tags = [...new Set(["#TheWord", "#VerseOfTheDay", ...parts.hashtags, "#Bible"])].slice(0, 7);
   return [
     parts.hook,
@@ -106,7 +106,6 @@ export function composeCaption(verse, parts, music) {
     "",
     `📖 Read it free in The Word: ${wordAppUrl}`,
     `Verse of the day from ${verse.source}.`,
-    music ? `🎵 ${music.credit}` : null,
     "",
     tags.join(" "),
   ]

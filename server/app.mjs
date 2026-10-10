@@ -7,12 +7,10 @@ import { readJson, uuidSchema, videoDir } from "./storage.mjs";
 import { ffmpegPath, ffprobePath, host, publicUrl, root, wordAppUrl, dataDir } from "./config.mjs";
 import { getDailyVerse } from "./verse.mjs";
 import { VOICES, DEFAULT_VOICE } from "./voice.mjs";
-import { MUSIC } from "./library.mjs";
 import { authorizationUrl, completeAuthorization, disconnect, tiktokStatus } from "./tiktok.mjs";
 
 export const videoSchema = z.object({
   voice: z.enum(Object.keys(VOICES)).default(DEFAULT_VOICE),
-  music: z.enum(["auto", ...MUSIC.map((track) => track.id)]).default("auto"),
   variation: z.number().int().min(0).max(9999).default(0),
 });
 
@@ -44,7 +42,6 @@ export async function createApp({ jobs = new Jobs() } = {}) {
     res.json({
       voices: Object.entries(VOICES).map(([id, label]) => ({ id, label })),
       defaultVoice: DEFAULT_VOICE,
-      music: MUSIC.map(({ id, title }) => ({ id, title })),
       wordAppUrl,
     }),
   );
@@ -62,7 +59,7 @@ export async function createApp({ jobs = new Jobs() } = {}) {
     res.json(job);
   });
 
-  // One click: today's verse → caption → narration → timing → B-roll + music → MP4.
+  // One click: today's verse → caption → narration → timing → B-roll → MP4.
   app.post("/api/videos", async (req, res) =>
     res.status(202).json(await jobs.add("video", videoSchema.parse(req.body ?? {}))),
   );

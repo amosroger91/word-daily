@@ -18,7 +18,7 @@ const STAGES = [
   ["caption", "AI caption"],
   ["voice", "Narration"],
   ["timing", "Word timing"],
-  ["media", "B-roll & music"],
+  ["media", "B-roll"],
   ["render", "Rendering"],
   ["check", "Final check"],
 ];
@@ -37,7 +37,6 @@ export default function App() {
   const [verse, setVerse] = useState(null);
   const [options, setOptions] = useState(null);
   const [voice, setVoice] = useState("");
-  const [music, setMusic] = useState("auto");
   const [job, setJob] = useState(null);
   const [video, setVideo] = useState(null);
   const [caption, setCaption] = useState("");
@@ -118,7 +117,7 @@ export default function App() {
     setNotice("");
     try {
       localStorage.setItem("word-voice", voice);
-      setJob(await api("api/videos", { voice, music, variation: variation.current }));
+      setJob(await api("api/videos", { voice, variation: variation.current }));
       variation.current += 1;
     } catch (e) {
       setError(e.message);
@@ -191,19 +190,12 @@ export default function App() {
                     {options?.voices.map((v) => <option key={v.id} value={v.id}>{v.label}</option>)}
                   </select>
                 </label>
-                <label>
-                  Music
-                  <select value={music} onChange={(e) => setMusic(e.target.value)} disabled={busy || !options}>
-                    <option value="auto">Chosen for today</option>
-                    {options?.music.map((m) => <option key={m.id} value={m.id}>{m.title}</option>)}
-                  </select>
-                </label>
               </div>
               <button className="primary" onClick={generate} disabled={busy || !verse}>
                 {generating ? <LoaderCircle className="spin" size={18} /> : <Sparkles size={18} />}
                 {generating ? "Generating…" : video?.verse?.date === verse?.date ? "Generate another take" : "Generate video"}
               </button>
-              <p className="hint">One click: the verse is read aloud, every word is highlighted as it's spoken, with B-roll, music, and an AI-written caption.</p>
+              <p className="hint">One click: the verse is read aloud, every word is highlighted as it's spoken, over B-roll, with an AI-written caption. No music, so you can pick a sound in TikTok.</p>
             </div>
           </article>
 
@@ -262,7 +254,7 @@ export default function App() {
             <div className="post">
               <div className="post-meta">
                 <strong>{video.verse.reference}</strong>
-                <span>{video.voiceLabel?.split(" — ")[0]} · {video.music.title} · {Math.round(video.duration)}s</span>
+                <span>{video.voiceLabel?.split(" — ")[0]} · {Math.round(video.duration)}s · voice only</span>
               </div>
               <label htmlFor="caption">Caption</label>
               <textarea id="caption" value={caption} onChange={(e) => { setCaption(e.target.value); setCopied(false); }} rows={11} />
@@ -277,7 +269,7 @@ export default function App() {
                   <ArrowDownToLine size={16} /> Download MP4
                 </a>
               </div>
-              <p className="credits">{video.music.credit}. B-roll from Mixkit. Caption by {video.captionModel === "template" ? "template" : "AI"}; review before posting.</p>
+              <p className="credits">B-roll from Mixkit. Add music in TikTok's editor. Caption by {video.captionModel === "template" ? "template" : "AI"}; review before posting.</p>
             </div>
           )}
         </section>

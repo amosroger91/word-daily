@@ -7,7 +7,7 @@ import { getDailyVerse } from "./verse.mjs";
 import { writeCaption, composeCaption } from "./caption.mjs";
 import { narrate, DEFAULT_VOICE, VOICES } from "./voice.mjs";
 import { timeNarration } from "./align.mjs";
-import { chooseBroll, chooseMusic, clipFile, musicFile } from "./library.mjs";
+import { chooseBroll, clipFile } from "./library.mjs";
 import { renderVerseVideo } from "./render.mjs";
 import { probe } from "./media.mjs";
 import { WIDTH, HEIGHT } from "../shared/scene.mjs";
@@ -52,22 +52,20 @@ export async function generateVideo(id, options, report, signal) {
   const { words, heard } = await timeNarration(verse, narration, (message) => timingReport(0.3, message), signal);
 
   const mediaReport = stage(report, "media");
-  mediaReport(0, "Gathering B-roll and music…");
+  mediaReport(0, "Gathering B-roll…");
   const seed = `${verse.date}:${options.variation || 0}`;
   const broll = chooseBroll(verse.text, seed);
-  const track = chooseMusic(seed, options.music);
   const clips = [];
   for (const [index, clip] of broll.entries()) {
     clips.push(await clipFile(clip, signal));
-    mediaReport((index + 1) / (broll.length + 1), `Gathering B-roll (${index + 1} of ${broll.length})…`);
+    mediaReport((index + 1) / broll.length, `Gathering B-roll (${index + 1} of ${broll.length})…`);
   }
-  const music = await musicFile(track, signal);
 
   const renderReport = stage(report, "render");
   const temporary = path.join(directory, "rendering.mp4");
   const output = path.join(directory, "verse-of-the-day.mp4");
   const rendered = await renderVerseVideo(
-    { verse, words, narration, clips, musicFile: music, output: temporary, dateLabel: prettyDate(verse.date), appLabel: appLabel(wordAppUrl) },
+    { verse, words, narration, clips, output: temporary, dateLabel: prettyDate(verse.date), appLabel: appLabel(wordAppUrl) },
     (percent, message) => renderReport(percent / 100, message),
     signal,
   );
@@ -83,14 +81,13 @@ export async function generateVideo(id, options, report, signal) {
   await run(ffmpegPath, ["-y", "-v", "error", "-ss", rendered.posterTime.toFixed(2), "-i", output, "-frames:v", "1", "-q:v", "2", path.join(directory, "poster.jpg")], { signal });
   // A clean B-roll still (no text) for the editor's verse card.
   await run(ffmpegPath, ["-y", "-v", "error", "-ss", "3", "-i", clips[0], "-frames:v", "1", "-vf", "scale=720:-2", "-q:v", "3", path.join(directory, "backdrop.jpg")], { signal });
-  const caption = composeCaption(verse, captionParts, track);
+  const caption = composeCaption(verse, captionParts);
   await writeFile(path.join(directory, "caption.txt"), caption, "utf8");
   const meta = {
     id,
     verse,
     voice,
     voiceLabel: VOICES[voice],
-    music: { id: track.id, title: track.title, credit: track.credit },
     broll: broll.map(({ id, label }) => ({ id, label })),
     caption,
     captionModel: captionParts.model,

@@ -17,13 +17,12 @@ const { app } = await createApp({
 test("one click queues a video job with sensible defaults", async () => {
   const response = await request(app).post("/api/videos").send({}).expect(202);
   assert.equal(response.body.type, "video");
-  assert.deepEqual(added.at(-1).input, { voice: "af_heart", music: "auto", variation: 0 });
+  assert.deepEqual(added.at(-1).input, { voice: "af_heart", variation: 0 });
   await request(app).post("/api/videos").send({ voice: "nobody" }).expect(400);
 });
-test("lists voices and music for the editor", async () => {
+test("lists voices for the editor", async () => {
   const { body } = await request(app).get("/api/options").expect(200);
   assert.ok(body.voices.some((voice) => voice.id === "am_michael"));
-  assert.ok(body.music.length >= 8);
 });
 test("guards hosts, cross-origin writes, and missing videos", async () => {
   await request(app).get("/api/health").set("Host", "evil.test").expect(403);

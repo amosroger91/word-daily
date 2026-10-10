@@ -7,9 +7,9 @@ import { drawScene, layoutVerse, timeline, WIDTH, HEIGHT, INTRO } from "../share
 const CROSSFADE = 1.2;
 
 // Builds the FFmpeg graph: B-roll clips (looped if short) cross-faded and
-// lightly graded, The Word overlay on top; narration warmed and leveled, music
-// leveled underneath, lifted whenever the voice rests.
-export function filterGraph({ clips, duration, voiceStart, voiceEnd }) {
+// lightly graded, The Word overlay on top; the narration warmed and leveled.
+// No music bed: music is added in TikTok's editor.
+export function filterGraph({ clips, duration, voiceStart }) {
   const n = clips.length;
   const each = (duration + CROSSFADE * (n - 1)) / n;
   const video = clips.map(
@@ -25,17 +25,14 @@ export function filterGraph({ clips, duration, voiceStart, voiceEnd }) {
     `[${last}]eq=saturation=0.86:contrast=1.03:brightness=-0.015:gamma=0.98,colorbalance=rs=0.03:gs=0.02:bs=-0.03:rm=0.02:bm=-0.02,vignette=angle=PI/5,format=rgba[bg]`,
     `[bg][0:v]overlay=0:0:format=auto,format=yuv420p[v]`,
   );
-  const voice = n + 1, music = n + 2;
-  const rest = (from, to) => `clip((t-${from})/0.7,0,1)*clip((${to}-t)/0.9,0,1)`;
+  const voice = n + 1;
   const audio = [
-    `[${voice}:a]aresample=48000,highpass=f=70,equalizer=f=180:t=q:w=1:g=1.5,equalizer=f=6500:t=q:w=1.4:g=-1.5,acompressor=threshold=0.12:ratio=2.5:attack=8:release=160:makeup=1.3,aecho=0.85:0.55:38|73:0.07|0.05,loudnorm=I=-14:TP=-1.5:LRA=7,aresample=48000,adelay=${Math.round(voiceStart * 1000)}:all=1,aformat=channel_layouts=stereo,apad=whole_dur=${duration.toFixed(3)}[voice]`,
-    `[${music}:a]aresample=48000,aformat=channel_layouts=stereo,atrim=duration=${duration.toFixed(3)},loudnorm=I=-27:TP=-5:LRA=9,aresample=48000,volume='1.9-0.9*${rest(voiceStart, voiceEnd)}':eval=frame,afade=t=in:d=1.6,afade=t=out:st=${(duration - 3).toFixed(3)}:d=3,apad=whole_dur=${duration.toFixed(3)}[bed]`,
-    `[voice][bed]amix=inputs=2:duration=first:normalize=0,alimiter=limit=0.9,atrim=duration=${duration.toFixed(3)}[a]`,
+    `[${voice}:a]aresample=48000,highpass=f=70,equalizer=f=180:t=q:w=1:g=1.5,equalizer=f=6500:t=q:w=1.4:g=-1.5,acompressor=threshold=0.12:ratio=2.5:attack=8:release=160:makeup=1.3,aecho=0.85:0.55:38|73:0.07|0.05,loudnorm=I=-14:TP=-1.5:LRA=7,aresample=48000,adelay=${Math.round(voiceStart * 1000)}:all=1,aformat=channel_layouts=stereo,apad=whole_dur=${duration.toFixed(3)},alimiter=limit=0.9,atrim=duration=${duration.toFixed(3)}[a]`,
   ];
   return [...video, ...audio].join(";");
 }
 
-export async function renderVerseVideo({ verse, words, narration, clips, musicFile, output, dateLabel, appLabel }, report, signal) {
+export async function renderVerseVideo({ verse, words, narration, clips, output, dateLabel, appLabel }, report, signal) {
   const canvas = createCanvas(WIDTH, HEIGHT);
   const ctx = canvas.getContext("2d");
   const layout = layoutVerse(ctx, words);
@@ -47,8 +44,7 @@ export async function renderVerseVideo({ verse, words, narration, clips, musicFi
     "-f", "rawvideo", "-pixel_format", "rgba", "-video_size", `${WIDTH}x${HEIGHT}`, "-framerate", String(FPS), "-i", "pipe:0",
     ...clips.flatMap((file) => ["-stream_loop", "-1", "-i", file]),
     "-i", narration.file,
-    "-stream_loop", "-1", "-i", musicFile,
-    "-filter_complex", filterGraph({ clips, duration, voiceStart, voiceEnd }),
+    "-filter_complex", filterGraph({ clips, duration, voiceStart }),
     "-map", "[v]", "-map", "[a]",
     "-t", duration.toFixed(3),
     "-c:v", "libx264", "-preset", process.env.X264_PRESET || "slow", "-crf", "17", "-profile:v", "high", "-tune", "film",

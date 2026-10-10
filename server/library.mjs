@@ -32,26 +32,6 @@ export const BROLL = [
 ];
 const clipUrl = (id) => `https://assets.mixkit.co/videos/${id}/${id}-1080.mp4`;
 
-// Gentle piano and ambient scores by Kevin MacLeod (incompetech.com), CC BY 4.0.
-export const MUSIC = [
-  "Meditation Impromptu 01",
-  "Meditation Impromptu 02",
-  "Meditation Impromptu 03",
-  "At Rest",
-  "Inner Light",
-  "Healing",
-  "Lasting Hope",
-  "Heartwarming",
-  "Dreamer",
-  "Clean Soul",
-  "Calmant",
-].map((title) => ({
-  id: title.toLowerCase().replace(/\s+/g, "-"),
-  title,
-  url: `https://incompetech.com/music/royalty-free/mp3-royaltyfree/${encodeURIComponent(title)}.mp3`,
-  credit: `Music: “${title}” by Kevin MacLeod (incompetech.com), licensed under CC BY 4.0`,
-}));
-
 // Verse words that suggest a B-roll theme.
 const themes = {
   water: /\b(water|waters|river|sea|stream|rain|drink|thirst|wash|well|flood|deep)\b/i,
@@ -87,9 +67,6 @@ export function chooseBroll(text, seed, count = 3) {
   })).sort((a, b) => b.score - a.score);
   return scored.slice(0, count).map(({ clip }) => clip);
 }
-export const chooseMusic = (seed, id) =>
-  MUSIC.find((track) => track.id === id) || MUSIC[Math.floor(seeded(`music:${seed}`)() * MUSIC.length)];
-
 const libraryDir = () => path.join(dataDir, "library");
 async function cached(file, url, signal) {
   if (await access(file).then(() => true, () => false)) return file;
@@ -107,4 +84,3 @@ async function cached(file, url, signal) {
   return file;
 }
 export const clipFile = (clip, signal) => cached(path.join(libraryDir(), "broll", `${clip.id}.mp4`), clipUrl(clip.id), signal);
-export const musicFile = (track, signal) => cached(path.join(libraryDir(), "music", `${track.id}.mp3`), track.url, signal);
