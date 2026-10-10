@@ -79,7 +79,7 @@ export default function App() {
         const saved = read("word-style");
         const first = data.styles.find((s) => s.id === saved) || data.styles[0];
         setStyle(first.id);
-        setVoice(read(`word-voice-${first.id}`) || first.voice);
+        setVoice(read(`word-voice-v2-${first.id}`) || first.voice);
         setTranslation(first.translation);
         setRef(read("word-ref") || "");
         if (read("word-source") === "pick") setSource("pick");
@@ -161,7 +161,7 @@ export default function App() {
   function chooseStyle(id) {
     const next = options.styles.find((s) => s.id === id);
     setStyle(id);
-    setVoice(read(`word-voice-${id}`) || next.voice);
+    setVoice(read(`word-voice-v2-${id}`) || next.voice);
     setTranslation(next.translation);
     write("word-style", id);
   }
@@ -169,7 +169,7 @@ export default function App() {
     setError("");
     setNotice("");
     try {
-      write(`word-voice-${style}`, voice);
+      write(`word-voice-v2-${style}`, voice);
       write("word-source", source);
       if (source === "pick") write("word-ref", ref);
       setJob(await api("api/videos", { style, voice, variation: variation.current, ...(source === "pick" && { ref, translation }) }));
@@ -275,7 +275,7 @@ export default function App() {
               <div className="styles" role="radiogroup" aria-label="Video style">
                 {options?.styles.map((s) => (
                   <button key={s.id} role="radio" aria-checked={style === s.id} className={`style-card style-${s.id}${style === s.id ? " on" : ""}`} onClick={() => chooseStyle(s.id)} disabled={busy}>
-                    <span className="swatch" aria-hidden="true">{s.id === "warrior" ? "✠" : "✦"}</span>
+                    <span className="swatch" aria-hidden="true">{s.id === "warrior" ? <Mark /> : "✦"}</span>
                     <strong>{s.name}</strong>
                     <small>{s.tagline}</small>
                   </button>

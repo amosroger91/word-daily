@@ -12,6 +12,7 @@ export const VOICES = {
   am_michael: "Michael — steady, reassuring (male)",
   am_fenrir: "Fenrir — deep, resonant (male)",
   bm_george: "George — classic British (male)",
+  bm_lewis: "Lewis — deep, weathered (male)",
 };
 export const DEFAULT_VOICE = "af_heart";
 const RATE = 24000;

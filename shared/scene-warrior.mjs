@@ -1,5 +1,5 @@
 // Warrior: dark, cinematic "edit" style. Black-and-white footage and Doré
-// engravings cut hard on the words, a red crusader cross (cross pattée),
+// engravings cut hard on the words, The Word's mark burning red,
 // and the phrase being read set huge, one line at a time, with the spoken
 // word burning white over a red glow. The Word's mark opens and closes it.
 import { WIDTH, HEIGHT, FONTS, clamp, ease, smooth, span, drawMark } from "./scene.mjs";
@@ -60,37 +60,19 @@ export function layout(ctx, words) {
   return { groups };
 }
 
-// Cross pattée: four arms flaring from a narrow centre.
-export function crossPattee(ctx, cx, cy, size, color, { glow = 0, alpha = 1 } = {}) {
-  const arm = size / 2, inner = size * 0.09, outer = size * 0.3;
+// The Word's mark (the book-bible logo), centred, in burning red.
+export function emblem(ctx, Path2D, cx, cy, height, color, { glow = 0, alpha = 1 } = {}) {
   ctx.save();
   ctx.globalAlpha *= alpha;
-  ctx.translate(cx, cy);
   if (glow) {
     ctx.shadowColor = DARK.glow;
     ctx.shadowBlur = glow;
   }
-  ctx.fillStyle = color;
-  // One outline around all four arms, so nothing overlaps or double-blends.
-  const rot = (x, y, i) => {
-    const a = (i * Math.PI) / 2, c = Math.cos(a), s = Math.sin(a);
-    return [x * c - y * s, x * s + y * c];
-  };
-  ctx.beginPath();
-  for (let i = 0; i < 4; i++) {
-    const p = (x, y) => rot(x, y, i);
-    const [ax, ay] = p(-inner, -inner), [bx, by] = p(-outer, -arm), [qx, qy] = p(0, -arm * 0.88), [cx2, cy2] = p(outer, -arm);
-    if (i === 0) ctx.moveTo(ax, ay);
-    else ctx.lineTo(ax, ay);
-    ctx.lineTo(bx, by);
-    ctx.quadraticCurveTo(qx, qy, cx2, cy2);
-  }
-  ctx.closePath();
-  ctx.fill();
+  drawMark(ctx, Path2D, cx - (height * 448) / 512 / 2, cy - height / 2, height, color);
   ctx.restore();
 }
 
-function wordmark(ctx, Path2D, y, size, alpha) {
+function wordmark(ctx, Path2D, y, size, alpha, { mark = true } = {}) {
   ctx.save();
   ctx.globalAlpha *= alpha;
   ctx.font = `500 ${size}px ${FONTS.scripture}`;
@@ -98,24 +80,24 @@ function wordmark(ctx, Path2D, y, size, alpha) {
   const text = "THE WORD";
   const width = ctx.measureText(text).width;
   const markH = size * 1.05;
-  const total = markH * 0.875 + size * 0.5 + width;
-  const x = (WIDTH - total) / 2;
-  drawMark(ctx, Path2D, x, y - markH * 0.82, markH, DARK.bone);
+  const lead = mark ? markH * 0.875 + size * 0.5 : 0;
+  const x = (WIDTH - (lead + width)) / 2;
+  if (mark) drawMark(ctx, Path2D, x, y - markH * 0.82, markH, DARK.bone);
   ctx.fillStyle = DARK.bone;
   ctx.textAlign = "left";
-  ctx.fillText(text, x + markH * 0.875 + size * 0.5, y);
+  ctx.fillText(text, x + lead, y);
   ctx.restore();
 }
 
 function blackCard(ctx, Path2D, p, { reference, url, closing = false }) {
   ctx.fillStyle = DARK.black;
   ctx.fillRect(0, 0, WIDTH, HEIGHT);
-  // The cross slams in, overshooting slightly, with a flicker of light.
+  // The Word's mark slams in, overshooting slightly, with a flicker of light.
   const hit = span(p, 0.08, 0.42);
   const scale = 1.35 - 0.35 * ease(hit);
   const flicker = p > 0.42 && p < 0.7 ? 0.75 + 0.25 * Math.sin(p * 90) : 1;
-  crossPattee(ctx, WIDTH / 2, 760, 520 * scale, DARK.red, { glow: 80, alpha: ease(hit) * flicker });
-  wordmark(ctx, Path2D, 1240, 76, ease(span(p, 0.5, 1.0)));
+  emblem(ctx, Path2D, WIDTH / 2, 760, 500 * scale, DARK.red, { glow: 80, alpha: ease(hit) * flicker });
+  wordmark(ctx, Path2D, 1240, 76, ease(span(p, 0.5, 1.0)), { mark: false });
   ctx.save();
   ctx.textAlign = "center";
   ctx.fillStyle = DARK.ash;
@@ -164,9 +146,9 @@ export function draw(ctx, Path2D, scene, t) {
   const group = current < 0 ? L.groups[0] : L.groups[groupIndex];
   const groupStart = words[group.start].start;
 
-  // Faint cross behind the words, pulsing as each phrase lands.
+  // The Word's mark, faint behind the words, pulsing as each phrase lands.
   const pulse = 1 - ease(span(narrationTime, groupStart, groupStart + 0.5));
-  crossPattee(ctx, WIDTH / 2, 990, 640 + 50 * pulse, DARK.red, { alpha: (0.07 + 0.13 * pulse) * (current >= 0 && !finished ? 1 : 0.6) });
+  emblem(ctx, Path2D, WIDTH / 2, 990, 620 + 50 * pulse, DARK.red, { alpha: (0.07 + 0.13 * pulse) * (current >= 0 && !finished ? 1 : 0.6) });
   // A pool of shadow behind the type keeps it legible over busy engravings.
   const pool = ctx.createRadialGradient(WIDTH / 2, 990, 40, WIDTH / 2, 990, 620);
   pool.addColorStop(0, "rgba(0,0,0,0.62)");
@@ -217,7 +199,7 @@ export function draw(ctx, Path2D, scene, t) {
   }
   ctx.shadowColor = "transparent";
 
-  // Reference along the bottom, framed by small crosses.
+  // Reference along the bottom, framed by small marks.
   ctx.save();
   ctx.font = `500 34px ${FONTS.scripture}`;
   ctx.letterSpacing = "8px";
@@ -227,8 +209,8 @@ export function draw(ctx, Path2D, scene, t) {
   const label = `${verse.reference.toUpperCase()}${verse.translation ? ` · ${verse.translation.toUpperCase()}` : ""}`;
   ctx.fillText(label, WIDTH / 2, 1716);
   const w = ctx.measureText(label).width;
-  crossPattee(ctx, WIDTH / 2 - w / 2 - 44, 1704, 30, DARK.red);
-  crossPattee(ctx, WIDTH / 2 + w / 2 + 40, 1704, 30, DARK.red);
+  emblem(ctx, Path2D, WIDTH / 2 - w / 2 - 44, 1704, 32, DARK.red);
+  emblem(ctx, Path2D, WIDTH / 2 + w / 2 + 40, 1704, 32, DARK.red);
   ctx.restore();
 
   // Flash frames on every hard cut.

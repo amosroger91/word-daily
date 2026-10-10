@@ -18,10 +18,10 @@ export const STYLES = {
   },
   warrior: {
     name: "Warrior",
-    tagline: "Dark and cinematic: the crusader cross, angels, hard cuts.",
-    voice: "am_fenrir",
+    tagline: "Dark and cinematic: angels and battle engravings, hard cuts.",
+    voice: "bm_lewis",
     translation: "kjv",
-    speed: 0.84,
+    speed: 0.8,
     pause: 0.55,
   },
 };

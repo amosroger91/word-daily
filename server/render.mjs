@@ -11,8 +11,10 @@ import { renderBackground, overlayGraph } from "./footage.mjs";
 const VOICE_CHAINS = {
   classic: "highpass=f=70,equalizer=f=180:t=q:w=1:g=1.5,equalizer=f=6500:t=q:w=1.4:g=-1.5,acompressor=threshold=0.12:ratio=2.5:attack=8:release=160:makeup=1.3,aecho=0.85:0.55:38|73:0.07|0.05",
   uplifting: "highpass=f=80,equalizer=f=3200:t=q:w=1.2:g=1.5,acompressor=threshold=0.12:ratio=2.5:attack=8:release=160:makeup=1.3,aecho=0.85:0.5:32|61:0.05|0.03",
-  // Slightly deeper (pitch down 4%, tempo restored so word timing holds), more chest, a cathedral tail.
-  warrior: "asetrate=46080,aresample=48000,atempo=1.0416667,highpass=f=55,equalizer=f=120:t=q:w=1:g=3,equalizer=f=2800:t=q:w=1.2:g=2,acompressor=threshold=0.09:ratio=4:attack=5:release=200:makeup=1.6,aecho=0.8:0.72:70|140|230:0.16|0.11|0.07",
+  // Deep and weathered: pitch down ~14% (about 2.5 semitones; tempo restored so
+  // word timing holds), more chest, less mud and air, a little grit, a cathedral tail.
+  warrior:
+    "asetrate=41280,aresample=48000,atempo=1.1627907,highpass=f=45,equalizer=f=110:t=q:w=0.9:g=4,equalizer=f=380:t=q:w=1.2:g=-2.5,equalizer=f=2300:t=q:w=1.1:g=2.5,equalizer=f=8500:t=q:w=1:g=-3,asoftclip=type=atan:threshold=0.6:output=0.95,acompressor=threshold=0.08:ratio=5:attack=4:release=220:makeup=1.8,aecho=0.8:0.72:70|140|230:0.16|0.11|0.07",
 };
 
 export function audioGraph(style, input, { voiceStart, duration }) {

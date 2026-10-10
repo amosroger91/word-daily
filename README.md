@@ -12,7 +12,7 @@ Use today's Daily Discovery verse, or choose any passage (up to 12 verses) by re
 | --- | --- | --- |
 | **The Word** | Deep sage reader card over calm nature B-roll | Heart, unhurried |
 | **Uplifting** | Light paper card, gold sparkles, bright footage: dancing in flowers, sunrise, worship, singing | Bella, brighter |
-| **Warrior** | Black-and-white Doré engravings and dark footage cut hard on each phrase, red cross pattée, flash frames, huge single-line type | Fenrir, slower, deeper, cathedral reverb (KJV by default) |
+| **Warrior** | Black-and-white Doré engravings and dark footage cut hard on each phrase, The Word's mark burning red, flash frames, huge single-line type | Lewis, pitched ~2.5 semitones down, slow, gritty, cathedral reverb (KJV by default) |
 
 Warrior captions stay about courage, discipline, and spiritual warfare, never hostility toward any group.
 
