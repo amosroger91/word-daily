@@ -30,6 +30,19 @@ function Mark(props) {
     </svg>
   );
 }
+// Per-viewer preferences; storage can be unavailable.
+const read = (key) => {
+  try {
+    return localStorage.getItem(key);
+  } catch {
+    return null;
+  }
+};
+const write = (key, value) => {
+  try {
+    localStorage.setItem(key, value);
+  } catch {}
+};
 const prettyDate = (iso) =>
   iso ? new Date(`${iso}T12:00:00Z`).toLocaleDateString("en-US", { month: "long", day: "numeric", year: "numeric", timeZone: "UTC" }) : "";
 
@@ -37,6 +50,12 @@ export default function App() {
   const [verse, setVerse] = useState(null);
   const [options, setOptions] = useState(null);
   const [voice, setVoice] = useState("");
+  const [style, setStyle] = useState("classic");
+  const [source, setSource] = useState("daily");
+  const [ref, setRef] = useState("");
+  const [translation, setTranslation] = useState("");
+  const [picked, setPicked] = useState(null);
+  const [pickError, setPickError] = useState("");
   const [job, setJob] = useState(null);
   const [video, setVideo] = useState(null);
   const [caption, setCaption] = useState("");
@@ -57,7 +76,13 @@ export default function App() {
     api("api/options")
       .then((data) => {
         setOptions(data);
-        setVoice(localStorage.getItem("word-voice") || data.defaultVoice);
+        const saved = read("word-style");
+        const first = data.styles.find((s) => s.id === saved) || data.styles[0];
+        setStyle(first.id);
+        setVoice(read(`word-voice-${first.id}`) || first.voice);
+        setTranslation(first.translation);
+        setRef(read("word-ref") || "");
+        if (read("word-source") === "pick") setSource("pick");
       })
       .catch((e) => setError(e.message));
     api("api/videos")
@@ -112,12 +137,42 @@ export default function App() {
     };
   }, [job?.id, job?.status]);
 
+  // A typed reference previews as soon as it resolves.
+  useEffect(() => {
+    if (source !== "pick" || !ref.trim() || !translation) {
+      setPicked(null);
+      setPickError("");
+      return;
+    }
+    const timer = setTimeout(() => {
+      api(`api/bible?ref=${encodeURIComponent(ref)}&translation=${translation}`)
+        .then((next) => {
+          setPicked(next);
+          setPickError("");
+        })
+        .catch((e) => {
+          setPicked(null);
+          setPickError(e.message);
+        });
+    }, 350);
+    return () => clearTimeout(timer);
+  }, [source, ref, translation]);
+
+  function chooseStyle(id) {
+    const next = options.styles.find((s) => s.id === id);
+    setStyle(id);
+    setVoice(read(`word-voice-${id}`) || next.voice);
+    setTranslation(next.translation);
+    write("word-style", id);
+  }
   async function generate() {
     setError("");
     setNotice("");
     try {
-      localStorage.setItem("word-voice", voice);
-      setJob(await api("api/videos", { voice, variation: variation.current }));
+      write(`word-voice-${style}`, voice);
+      write("word-source", source);
+      if (source === "pick") write("word-ref", ref);
+      setJob(await api("api/videos", { style, voice, variation: variation.current, ...(source === "pick" && { ref, translation }) }));
       variation.current += 1;
     } catch (e) {
       setError(e.message);
@@ -142,6 +197,8 @@ export default function App() {
     }
   }
 
+  const shown = source === "pick" ? picked : verse;
+  const ready = source === "pick" ? Boolean(picked) : Boolean(verse);
   const busy = active(job);
   const generating = busy && job.type === "video";
   const stageIndex = generating ? STAGES.findIndex(([id]) => id === job.stage) : -1;
@@ -170,19 +227,60 @@ export default function App() {
             <div className="verse-art" style={video?.backdropUrl ? { backgroundImage: `url(${video.backdropUrl})` } : undefined}>
               <div className="verse-scrim" />
               <div className="verse-copy">
-                <div className="eyebrow"><span className="flourish">✦</span> VERSE OF THE DAY{verse ? ` · ${prettyDate(verse.date).toUpperCase()}` : ""}</div>
-                {verse ? (
+                <div className="eyebrow">
+                  <span className="flourish">✦</span>{" "}
+                  {source === "pick" ? (picked ? picked.translationName.toUpperCase() : "CHOOSE A VERSE") : `VERSE OF THE DAY${verse ? ` · ${prettyDate(verse.date).toUpperCase()}` : ""}`}
+                </div>
+                {shown ? (
                   <>
-                    <blockquote>{verse.text}</blockquote>
-                    <cite>{verse.reference}</cite>
-                    <span className="credit">From {verse.source}{verse.stale ? " · offline copy" : ""}</span>
+                    <blockquote>{shown.text}</blockquote>
+                    <cite>{shown.reference}</cite>
+                    <span className="credit">{shown.picked ? `${shown.translationName} · public domain` : `From ${shown.source}${shown.stale ? " · offline copy" : ""}`}</span>
                   </>
                 ) : (
-                  <blockquote className="loading">Opening today's verse…</blockquote>
+                  <blockquote className="loading">
+                    {source === "pick" ? pickError || "Type a reference below, like Joshua 1:9 or Romans 8:31–39." : "Opening today's verse…"}
+                  </blockquote>
                 )}
               </div>
             </div>
             <div className="verse-tools">
+              <div className="tabs" role="tablist" aria-label="Verse">
+                <button role="tab" aria-selected={source === "daily"} className={source === "daily" ? "tab on" : "tab"} onClick={() => setSource("daily")} disabled={busy}>
+                  Today's verse
+                </button>
+                <button role="tab" aria-selected={source === "pick"} className={source === "pick" ? "tab on" : "tab"} onClick={() => setSource("pick")} disabled={busy}>
+                  Choose a verse
+                </button>
+              </div>
+              {source === "pick" && (
+                <div className="pick">
+                  <label>
+                    Reference
+                    <input value={ref} onChange={(e) => setRef(e.target.value)} placeholder="Joshua 1:9" disabled={busy} autoComplete="off" spellCheck="false" />
+                  </label>
+                  <label>
+                    Translation
+                    <select value={translation} onChange={(e) => setTranslation(e.target.value)} disabled={busy || !options}>
+                      {options?.translations.map((t) => (
+                        <option key={t.id} value={t.id}>
+                          {t.short} · {t.name}
+                        </option>
+                      ))}
+                    </select>
+                  </label>
+                  {pickError && <p className="pick-error">{pickError}</p>}
+                </div>
+              )}
+              <div className="styles" role="radiogroup" aria-label="Video style">
+                {options?.styles.map((s) => (
+                  <button key={s.id} role="radio" aria-checked={style === s.id} className={`style-card style-${s.id}${style === s.id ? " on" : ""}`} onClick={() => chooseStyle(s.id)} disabled={busy}>
+                    <span className="swatch" aria-hidden="true">{s.id === "warrior" ? "✠" : "✦"}</span>
+                    <strong>{s.name}</strong>
+                    <small>{s.tagline}</small>
+                  </button>
+                ))}
+              </div>
               <div className="selects">
                 <label>
                   Voice
@@ -191,9 +289,9 @@ export default function App() {
                   </select>
                 </label>
               </div>
-              <button className="primary" onClick={generate} disabled={busy || !verse}>
+              <button className="primary" onClick={generate} disabled={busy || !ready}>
                 {generating ? <LoaderCircle className="spin" size={18} /> : <Sparkles size={18} />}
-                {generating ? "Generating…" : video?.verse?.date === verse?.date ? "Generate another take" : "Generate video"}
+                {generating ? "Generating…" : video && video.style === style && video.verse?.reference === shown?.reference ? "Generate another take" : "Generate video"}
               </button>
               <p className="hint">One click: the verse is read aloud, every word is highlighted as it's spoken, over B-roll, with an AI-written caption. No music, so you can pick a sound in TikTok.</p>
             </div>
@@ -254,7 +352,7 @@ export default function App() {
             <div className="post">
               <div className="post-meta">
                 <strong>{video.verse.reference}</strong>
-                <span>{video.voiceLabel?.split(" — ")[0]} · {Math.round(video.duration)}s · voice only</span>
+                <span>{video.styleName || "The Word"} · {video.voiceLabel?.split(" — ")[0]} · {Math.round(video.duration)}s · voice only</span>
               </div>
               <label htmlFor="caption">Caption</label>
               <textarea id="caption" value={caption} onChange={(e) => { setCaption(e.target.value); setCopied(false); }} rows={11} />
@@ -269,7 +367,7 @@ export default function App() {
                   <ArrowDownToLine size={16} /> Download MP4
                 </a>
               </div>
-              <p className="credits">B-roll from Mixkit. Add music in TikTok's editor. Caption by {video.captionModel === "template" ? "template" : "AI"}; review before posting.</p>
+              <p className="credits">{video.footage?.some((f) => f.kind === "still") ? "Engravings by Gustave Doré (public domain). " : ""}Footage from Mixkit. Add music in TikTok's editor. Caption by {video.captionModel === "template" ? "template" : "AI"}; review before posting.</p>
             </div>
           )}
         </section>

@@ -81,3 +81,21 @@ test("picks B-roll that fits the verse, reproducibly per day", () => {
   assert.deepEqual(chooseBroll("Be still", "a"), chooseBroll("Be still", "a"));
   assert.equal(new Set(BROLL.map((clip) => clip.id)).size, BROLL.length);
 });
+
+test("looks up any reference in the bundled translations", async () => {
+  const { lookupVerse } = await import("../server/bible.mjs");
+  assert.equal(lookupVerse("Eph 6:10-11", "kjv").reference, "Ephesians 6:10–11");
+  assert.equal(lookupVerse("1 cor 13:4", "web").reference, "1 Corinthians 13:4");
+  assert.equal(lookupVerse("Psalm 23", "kjv").reference, "Psalm 23:1–6");
+  assert.match(lookupVerse("Isaiah 40:31", "web").text, /^But those who wait/);
+  // Unbalanced continuation quotes from verse boundaries are dropped.
+  assert.doesNotMatch(lookupVerse("Joshua 1:9", "web").text, /”$/);
+  assert.throws(() => lookupVerse("Nope 1:1"), /Couldn't find/);
+});
+
+test("groups Warrior phrases at punctuation, three words at most", async () => {
+  const { groupWords } = await import("../shared/scene-warrior.mjs");
+  const words = verseTokens("Be strong and of a good courage; be not afraid, neither be thou dismayed.");
+  const groups = groupWords(words).map((g) => words.slice(g.start, g.end + 1).map((w) => w.word).join(" "));
+  assert.deepEqual(groups, ["Be strong and", "of a good", "courage;", "be not afraid,", "neither be thou", "dismayed."]);
+});

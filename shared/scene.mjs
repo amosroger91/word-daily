@@ -36,26 +36,26 @@ export function timeline(narrationDuration) {
   return { voiceStart: VOICE_START, voiceEnd, outroStart, duration: outroStart + OUTRO };
 }
 
-const clamp = (value, min = 0, max = 1) => Math.min(max, Math.max(min, value));
-const ease = (t) => 1 - (1 - clamp(t)) ** 3;
-const smooth = (t) => clamp(t) * clamp(t) * (3 - 2 * clamp(t));
-const span = (t, from, to) => clamp((t - from) / (to - from));
+export const clamp = (value, min = 0, max = 1) => Math.min(max, Math.max(min, value));
+export const ease = (t) => 1 - (1 - clamp(t)) ** 3;
+export const smooth = (t) => clamp(t) * clamp(t) * (3 - 2 * clamp(t));
+export const span = (t, from, to) => clamp((t - from) / (to - from));
 
 const MARGIN = 92;
 const TEXT_WIDTH = WIDTH - MARGIN * 2;
 
 // Lays the verse out once: font size chosen to fill the reading area comfortably.
-export function layoutVerse(ctx, words) {
-  const maxHeight = 820;
-  for (let size = 84; size >= 46; size -= 2) {
-    ctx.font = `400 ${size}px ${FONTS.scripture}`;
+export function layoutVerse(ctx, words, { left = MARGIN, width = TEXT_WIDTH, maxHeight = 820, center = 1010, largest = 84, smallest = 46, weight = 400 } = {}) {
+  const lineWidth = width;
+  for (let size = largest; size >= smallest; size -= 2) {
+    ctx.font = `${weight} ${size}px ${FONTS.scripture}`;
     const space = ctx.measureText(" ").width;
     const lineHeight = Math.round(size * 1.48);
     const placed = [];
     let x = 0, line = 0;
     for (const word of words) {
       const width = ctx.measureText(word.word).width;
-      if (x > 0 && x + width > TEXT_WIDTH) {
+      if (x > 0 && x + width > lineWidth) {
         x = 0;
         line++;
       }
@@ -63,21 +63,21 @@ export function layoutVerse(ctx, words) {
       x += width + space;
     }
     const lines = line + 1;
-    if (lines * lineHeight <= maxHeight || size === 46) {
-      const top = 1010 - (lines * lineHeight) / 2;
+    if (lines * lineHeight <= maxHeight || size <= smallest) {
+      const top = center - (lines * lineHeight) / 2;
       return {
         size,
         lineHeight,
         lines,
         top,
         bottom: top + lines * lineHeight,
-        words: placed.map((word) => ({ ...word, x: MARGIN + word.x, y: top + word.line * lineHeight })),
+        words: placed.map((word) => ({ ...word, x: left + word.x, y: top + word.line * lineHeight })),
       };
     }
   }
 }
 
-function drawMark(ctx, Path2D, x, y, height, color, reveal = 1) {
+export function drawMark(ctx, Path2D, x, y, height, color, reveal = 1) {
   const scale = height / 512;
   ctx.save();
   ctx.translate(x, y);
@@ -93,7 +93,7 @@ function drawMark(ctx, Path2D, x, y, height, color, reveal = 1) {
 }
 
 // The Word's ✦ flourish, drawn as a four-point star (Literata has no glyph for it).
-function flourish(ctx, x, y, size, color, alpha = 1) {
+export function flourish(ctx, x, y, size, color, alpha = 1) {
   const r = size / 2, waist = r * 0.2;
   ctx.save();
   ctx.globalAlpha *= alpha;
@@ -227,7 +227,7 @@ export function drawScene(ctx, Path2D, scene, t) {
   ctx.letterSpacing = "4px";
   flourish(ctx, MARGIN + 12, layout.top - 68, 34, PALETTE.gold);
   ctx.fillStyle = "rgba(231,234,221,0.9)";
-  ctx.fillText(`VERSE OF THE DAY · ${scene.dateLabel.toUpperCase()}`, MARGIN + 38, layout.top - 75);
+  ctx.fillText(scene.eyebrow.toUpperCase(), MARGIN + 38, layout.top - 75);
   ctx.letterSpacing = "0px";
 
   // Scripture, word by word.
@@ -309,7 +309,7 @@ export function drawScene(ctx, Path2D, scene, t) {
   ctx.fill();
   ctx.font = `400 24px ${FONTS.label}`;
   ctx.fillStyle = PALETTE.inkSoft;
-  ctx.fillText(`From ${verse.source}`, MARGIN, barY + 62);
+  ctx.fillText(verse.picked ? verse.translationName : `From ${verse.source}`, MARGIN, barY + 62);
   ctx.textAlign = "right";
   ctx.fillText("Read along in The Word", WIDTH - MARGIN, barY + 62);
   ctx.textAlign = "left";

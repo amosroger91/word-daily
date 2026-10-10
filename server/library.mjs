@@ -1,9 +1,3 @@
-import { createWriteStream } from "node:fs";
-import { access, mkdir, rename, rm } from "node:fs/promises";
-import path from "node:path";
-import { Readable } from "node:stream";
-import { pipeline } from "node:stream/promises";
-import { dataDir } from "./config.mjs";
 
 // Vertical 1080×1920 B-roll from Mixkit (Mixkit Stock Video Free License:
 // free for commercial use, no attribution required). Tags steer the pick
@@ -30,7 +24,6 @@ export const BROLL = [
   { id: 1181, label: "Frangipani", tags: ["flower", "beauty", "joy"] },
   { id: 1168, label: "Bougainvillea", tags: ["flower", "joy", "life"] },
 ];
-const clipUrl = (id) => `https://assets.mixkit.co/videos/${id}/${id}-1080.mp4`;
 
 // Verse words that suggest a B-roll theme.
 const themes = {
@@ -67,20 +60,3 @@ export function chooseBroll(text, seed, count = 3) {
   })).sort((a, b) => b.score - a.score);
   return scored.slice(0, count).map(({ clip }) => clip);
 }
-const libraryDir = () => path.join(dataDir, "library");
-async function cached(file, url, signal) {
-  if (await access(file).then(() => true, () => false)) return file;
-  await mkdir(path.dirname(file), { recursive: true });
-  const response = await fetch(url, { signal: AbortSignal.any([signal, AbortSignal.timeout(180000)]) });
-  if (!response.ok) throw new Error(`Could not download ${path.basename(file)} (${response.status}).`);
-  const partial = `${file}.part`;
-  try {
-    await pipeline(Readable.fromWeb(response.body), createWriteStream(partial));
-    await rename(partial, file);
-  } catch (error) {
-    await rm(partial, { force: true });
-    throw error;
-  }
-  return file;
-}
-export const clipFile = (clip, signal) => cached(path.join(libraryDir(), "broll", `${clip.id}.mp4`), clipUrl(clip.id), signal);

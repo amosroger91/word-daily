@@ -15,10 +15,12 @@ export const VOICES = {
 };
 export const DEFAULT_VOICE = "af_heart";
 const RATE = 24000;
-// Unhurried, reverent reading pace and the pauses between phrases.
+// Default pace and pauses (each style sets its own).
 const SPEED = 0.9;
 const PAUSE_AFTER_REFERENCE = 0.75;
 const PAUSE_BETWEEN_CHUNKS = 0.38;
+// Small-caps names in the KJV read as words, not letters.
+export const forSpeech = (text) => text.replace(/\bLORD\b/g, "Lord").replace(/\bGOD\b/g, "God").replace(/\bJAH\b/g, "Jah");
 
 let engine;
 async function loadVoice(report) {
@@ -53,12 +55,12 @@ function soften(samples) {
 
 // Narrates "<reference>. <verse>" and records where each spoken chunk sits,
 // so word timings can be anchored to known boundaries.
-export async function narrate(verse, voice, file, report = () => {}, signal) {
+export async function narrate(verse, voice, file, report = () => {}, signal, { speed = SPEED, pause = PAUSE_BETWEEN_CHUNKS } = {}) {
   if (!VOICES[voice]) voice = DEFAULT_VOICE;
   const tts = await loadVoice(report);
   const parts = [
     { kind: "reference", text: spokenReference(verse.ref), pause: PAUSE_AFTER_REFERENCE },
-    ...speechChunks(verse.text).map((text) => ({ kind: "verse", text, pause: PAUSE_BETWEEN_CHUNKS })),
+    ...speechChunks(verse.text).map((text) => ({ kind: "verse", text, pause })),
   ];
   const lead = Math.round(RATE * 0.15);
   const pieces = [new Float32Array(lead)];
@@ -67,7 +69,7 @@ export async function narrate(verse, voice, file, report = () => {}, signal) {
   for (const [index, part] of parts.entries()) {
     signal?.throwIfAborted();
     report(`Recording the narration (${index + 1} of ${parts.length})…`);
-    const audio = await tts.generate(part.text, { voice, speed: SPEED });
+    const audio = await tts.generate(forSpeech(part.text), { voice, speed });
     const samples = soften(Float32Array.from(audio.audio));
     segments.push({ kind: part.kind, text: part.text, start: cursor / RATE, end: (cursor + samples.length) / RATE });
     pieces.push(samples, new Float32Array(Math.round(RATE * (index === parts.length - 1 ? 0.3 : part.pause))));

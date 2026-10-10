@@ -7,10 +7,16 @@ import { readJson, uuidSchema, videoDir } from "./storage.mjs";
 import { ffmpegPath, ffprobePath, host, publicUrl, root, wordAppUrl, dataDir } from "./config.mjs";
 import { getDailyVerse } from "./verse.mjs";
 import { VOICES, DEFAULT_VOICE } from "./voice.mjs";
+import { lookupVerse, TRANSLATIONS } from "./bible.mjs";
+import { STYLES } from "../shared/styles.mjs";
 import { authorizationUrl, completeAuthorization, disconnect, tiktokStatus } from "./tiktok.mjs";
 
 export const videoSchema = z.object({
-  voice: z.enum(Object.keys(VOICES)).default(DEFAULT_VOICE),
+  style: z.enum(Object.keys(STYLES)).default("classic"),
+  // Omit ref for today's verse; otherwise any reference, e.g. "Joshua 1:9".
+  ref: z.string().trim().min(3).max(60).optional(),
+  translation: z.enum(Object.keys(TRANSLATIONS)).optional(),
+  voice: z.enum(Object.keys(VOICES)).optional(),
   variation: z.number().int().min(0).max(9999).default(0),
 });
 
@@ -42,10 +48,15 @@ export async function createApp({ jobs = new Jobs() } = {}) {
     res.json({
       voices: Object.entries(VOICES).map(([id, label]) => ({ id, label })),
       defaultVoice: DEFAULT_VOICE,
+      styles: Object.entries(STYLES).map(([id, style]) => ({ id, ...style })),
+      translations: Object.entries(TRANSLATIONS).map(([id, t]) => ({ id, ...t })),
       wordAppUrl,
     }),
   );
   app.get("/api/verse", async (_req, res) => res.json(await getDailyVerse()));
+  app.get("/api/bible", (req, res) =>
+    res.json(lookupVerse(String(req.query.ref || ""), String(req.query.translation || "web"))),
+  );
 
   app.get("/api/jobs", (_req, res) => res.json(jobs.list()));
   app.get("/api/jobs/:id", (req, res) => {
@@ -60,9 +71,12 @@ export async function createApp({ jobs = new Jobs() } = {}) {
   });
 
   // One click: today's verse → caption → narration → timing → B-roll → MP4.
-  app.post("/api/videos", async (req, res) =>
-    res.status(202).json(await jobs.add("video", videoSchema.parse(req.body ?? {}))),
-  );
+  app.post("/api/videos", async (req, res) => {
+    const options = videoSchema.parse(req.body ?? {});
+    // Reject a bad reference now rather than minutes into the job.
+    if (options.ref) lookupVerse(options.ref, options.translation || STYLES[options.style].translation);
+    res.status(202).json(await jobs.add("video", options));
+  });
   app.get("/api/videos", async (_req, res) => {
     const ids = await readdir(path.join(dataDir, "videos")).catch(() => []);
     const videos = (

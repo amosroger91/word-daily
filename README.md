@@ -4,6 +4,18 @@ Videos are voice only, so music can be added in TikTok's editor.
 
 One click turns today's verse into a polished 1080 × 1920 video in The Word's style: the verse is read aloud by a natural voice, every word lights up gold as it is spoken, over calm nature B-roll, with The Word's logo at the start and end and an AI-written caption ready to post or send to TikTok drafts.
 
+## Verses and styles
+
+Use today's Daily Discovery verse, or choose any passage (up to 12 verses) by reference: `Joshua 1:9`, `Eph 6:10-17`, `Psalm 23`. Picked verses come from the public-domain World English Bible or King James Version bundled with The Word.
+
+| Style | Look | Voice |
+| --- | --- | --- |
+| **The Word** | Deep sage reader card over calm nature B-roll | Heart, unhurried |
+| **Uplifting** | Light paper card, gold sparkles, bright footage: dancing in flowers, sunrise, worship, singing | Bella, brighter |
+| **Warrior** | Black-and-white Doré engravings and dark footage cut hard on each phrase, red cross pattée, flash frames, huge single-line type | Fenrir, slower, deeper, cathedral reverb (KJV by default) |
+
+Warrior captions stay about courage, discipline, and spiritual warfare, never hostility toward any group.
+
 ## How a video is made
 
 ```text
@@ -11,7 +23,7 @@ Daily Discovery API ──► verse (cached per day)
                         ├─ caption: Qwen3 (server llama.cpp, or on-device) → hook + reflection + tags
                         ├─ narration: Kokoro-82M, sentence by sentence, with natural pauses
                         ├─ word timing: Whisper hears each phrase → aligned onto the exact verse words
-                        ├─ B-roll: 3 Mixkit clips matched to the verse's imagery, cross-faded and graded
+                        ├─ footage: Mixkit clips and Doré engravings matched to the verse, prepared once as 1080×1920 crops
                         └─ render: The Word overlay (Canvas) + FFmpeg → H.264 CRF 17 / AAC 256k, -14 LUFS
 ```
 
@@ -43,8 +55,9 @@ The first generation downloads the voice (~330 MB), Whisper (~140 MB), and, with
 | Method | Endpoint | Purpose |
 | --- | --- | --- |
 | GET | `/api/verse` | Today's verse |
-| GET | `/api/options` | Voices |
-| POST | `/api/videos` | Generate `{ voice?, variation? }` → job |
+| GET | `/api/options` | Voices, styles, translations |
+| GET | `/api/bible?ref=Joshua 1:9&translation=kjv` | Look up any passage |
+| POST | `/api/videos` | Generate `{ style?, ref?, translation?, voice?, variation? }` → job |
 | GET | `/api/jobs/:id` | Progress (`stage`: verse, caption, voice, timing, media, render, check) |
 | GET | `/api/videos` | Recent videos |
 | GET | `/api/videos/:id/{video,download,poster,caption}` | Files |
@@ -56,4 +69,4 @@ The first generation downloads the voice (~330 MB), Whisper (~140 MB), and, with
 
 ## Credits
 
-Narration: [Kokoro-82M](https://huggingface.co/hexgrad/Kokoro-82M) (Apache-2.0). Timing: Whisper. B-roll: [Mixkit](https://mixkit.co/license/). Fonts: Literata and Atkinson Hyperlegible (OFL). Logo mark: Font Awesome Free (CC BY 4.0). Verses: [Daily Discovery Bible Study](https://discoverybiblestudy.org/daily/).
+Narration: [Kokoro-82M](https://huggingface.co/hexgrad/Kokoro-82M) (Apache-2.0). Timing: Whisper. Footage: [Mixkit](https://mixkit.co/license/). Engravings: Gustave Doré via Wikimedia Commons (public domain). Scripture: WEB and KJV (public domain). Fonts: Literata and Atkinson Hyperlegible (OFL). Logo mark: Font Awesome Free (CC BY 4.0). Verses: [Daily Discovery Bible Study](https://discoverybiblestudy.org/daily/).

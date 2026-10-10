@@ -17,8 +17,15 @@ const EXAMPLE = [
     }),
   },
 ];
-const messagesFor = (verse) => [
-  { role: "system", content: SYSTEM },
+// Tone per video style.
+const TONES = {
+  classic: "",
+  uplifting: "\nTone: joyful, bright, and warm, like good news shared with a friend. Hashtags can be celebratory (#Joy, #Praise).",
+  warrior:
+    "\nTone: terse, bold, and steady, for men who want to be strengthened: courage, discipline, standing firm, spiritual warfare against sin and fear. Short punchy sentences. Never hostile toward any person, group, or religion, and nothing political or violent. Hashtags like #ChristianMen #ArmorOfGod #StandFirm.",
+};
+const messagesFor = (verse, style = "classic") => [
+  { role: "system", content: SYSTEM + (TONES[style] || "") },
   ...EXAMPLE,
   { role: "user", content: `${verse.reference} — "${verse.text}"` },
 ];
@@ -45,7 +52,7 @@ export function parseCaption(raw) {
   return { hook, reflection, hashtags: hashtags.slice(0, 4) };
 }
 
-async function remote(verse, signal) {
+async function remote(verse, signal, style) {
   const response = await fetch(`${process.env.LLM_URL.replace(/\/+$/, "")}/v1/chat/completions`, {
     method: "POST",
     headers: {
@@ -54,7 +61,7 @@ async function remote(verse, signal) {
     },
     body: JSON.stringify({
       model: process.env.LLM_MODEL || "default",
-      messages: messagesFor(verse),
+      messages: messagesFor(verse, style),
       temperature: 0.7,
       top_p: 0.9,
       max_tokens: 220,
@@ -66,7 +73,7 @@ async function remote(verse, signal) {
 }
 
 let local;
-async function onDevice(verse, report) {
+async function onDevice(verse, report, style) {
   const { pipeline } = await import("@huggingface/transformers");
   local ||= pipeline("text-generation", process.env.CAPTION_MODEL || "onnx-community/Qwen3-1.7B-ONNX", {
     dtype: "q4",
@@ -77,7 +84,7 @@ async function onDevice(verse, report) {
   });
   const generate = await local;
   // Qwen3's soft switch: answer directly instead of spending the budget thinking.
-  const messages = messagesFor(verse);
+  const messages = messagesFor(verse, style);
   messages.at(-1).content += " /no_think";
   const output = await generate(messages, {
     max_new_tokens: 180,
@@ -96,7 +103,7 @@ export const fallbackCaption = (verse) => ({
 });
 
 export function composeCaption(verse, parts) {
-  const tags = [...new Set(["#TheWord", "#VerseOfTheDay", ...parts.hashtags, "#Bible"])].slice(0, 7);
+  const tags = [...new Set(["#TheWord", verse.picked ? "#BibleVerse" : "#VerseOfTheDay", ...parts.hashtags, "#Bible"])].slice(0, 7);
   return [
     parts.hook,
     "",
@@ -105,7 +112,7 @@ export function composeCaption(verse, parts) {
     parts.reflection,
     "",
     `📖 Read it free in The Word: ${wordAppUrl}`,
-    `Verse of the day from ${verse.source}.`,
+    verse.picked ? `Scripture: ${verse.translationName} (public domain).` : `Verse of the day from ${verse.source}.`,
     "",
     tags.join(" "),
   ]
@@ -121,19 +128,19 @@ async function releaseLocal() {
   await generate?.dispose?.();
 }
 
-export async function writeCaption(verse, report = () => {}, signal) {
+export async function writeCaption(verse, report = () => {}, signal, style = "classic") {
   try {
-    return await draftCaption(verse, report, signal);
+    return await draftCaption(verse, report, signal, style);
   } finally {
     await releaseLocal();
   }
 }
-async function draftCaption(verse, report, signal) {
+async function draftCaption(verse, report, signal, style) {
   const attempts = process.env.LLM_URL ? 3 : 2;
   for (let i = 0; i < attempts; i++) {
     signal?.throwIfAborted();
     try {
-      const raw = process.env.LLM_URL ? await remote(verse, signal) : await onDevice(verse, report);
+      const raw = process.env.LLM_URL ? await remote(verse, signal, style) : await onDevice(verse, report, style);
       const parsed = parseCaption(raw);
       if (!parsed) console.warn(`Caption attempt ${i + 1} was off-brief: ${String(raw).slice(0, 400)}`);
       if (parsed) return { ...parsed, model: process.env.LLM_URL ? process.env.LLM_MODEL || "remote" : "Qwen3-1.7B" };
